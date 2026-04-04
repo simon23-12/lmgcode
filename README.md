@@ -147,4 +147,3 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 Der Assistent **schreibt Code wenn gewünscht** — er ist kein Lehrer der nur Hinweise gibt. Er erklärt kurz was der Code macht, hält Erklärungen aber knapp. Antwortet in der Sprache des Schülers (DE/EN).
 
 
-Vercel setzt den API-Key automatisch (bereits konfiguriert unter Settings → Environment Variables).
