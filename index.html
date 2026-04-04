@@ -1,0 +1,1823 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LMG Code</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:            #1e1e1e;
+      --sidebar-bg:    #252526;
+      --header-bg:     #1a2744;
+      --tab-inactive:  #2d2d2d;
+      --tab-active:    #1e1e1e;
+      --border:        #3e3e42;
+      --text:          #cccccc;
+      --text-dim:      #858585;
+      --accent:        #0078d4;
+      --accent-hover:  #1a8ae0;
+      --chat-bot-bg:   #2a2a2a;
+      --input-bg:      #3c3c3c;
+      --scrollbar:     #424242;
+    }
+
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
+
+    #app { display: flex; flex-direction: column; height: 100dvh; }
+
+    /* ── Header ── */
+    #header {
+      height: 48px; background: var(--header-bg); display: flex; align-items: center;
+      padding: 0 16px; gap: 12px; flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    #header img { height: 46px; width: 46px; border-radius: 6px; object-fit: cover; }
+    #header h1 { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.2px; }
+    #header-byline { margin-left: auto; font-size: 11px; color: var(--text-dim); }
+
+    /* ── Workspace ── */
+    #workspace { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Resizer ── */
+    .resizer {
+      width: 5px; background: var(--border); cursor: col-resize; flex-shrink: 0;
+      transition: background 0.15s; z-index: 10; user-select: none; position: relative;
+    }
+    .resizer::after {
+      content: ''; position: absolute; inset: 0 -4px; /* wider grab zone */
+    }
+    .resizer:hover, .resizer.dragging { background: var(--accent); }
+
+    /* ── Sidebar ── */
+    #sidebar { width: 240px; min-width: 80px; max-width: 480px; flex-shrink: 0;
+      background: var(--sidebar-bg); border-right: none;
+      display: flex; flex-direction: column; overflow: hidden; }
+
+    #upload-toolbar { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0; }
+
+    .upload-btn {
+      flex: 1; background: var(--input-bg); border: 1px solid var(--border); color: var(--text);
+      padding: 5px 6px; border-radius: 4px; cursor: pointer; font-size: 11px;
+      display: flex; align-items: center; gap: 4px; justify-content: center;
+      transition: background 0.15s; font-family: inherit;
+    }
+    .upload-btn:hover { background: #4a4a4a; }
+
+    #sidebar-label { font-size: 10px; font-weight: 700; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 1px; padding: 8px 12px 4px; flex-shrink: 0; }
+
+    #file-tree { flex: 1; overflow-y: auto; padding: 4px 0; }
+    #file-tree::-webkit-scrollbar { width: 6px; }
+    #file-tree::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+
+    .tree-empty { padding: 20px 12px; color: var(--text-dim); font-size: 11px;
+      text-align: center; line-height: 1.6; }
+    .tree-empty i { font-size: 28px; display: block; margin-bottom: 10px; opacity: 0.25; }
+
+    .tree-folder { padding: 4px 8px 3px 12px; font-size: 11px; color: var(--text-dim);
+      display: flex; align-items: center; gap: 5px; user-select: none; margin-top: 6px; }
+    .tree-folder i { font-size: 10px; }
+
+    .tree-file {
+      padding: 3px 8px 3px 24px; font-size: 12px; color: var(--text);
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+      border-radius: 3px; margin: 0 4px; user-select: none;
+    }
+    .tree-file:hover { background: rgba(255,255,255,0.06); }
+    .tree-file.active { background: rgba(0,120,212,0.18); color: #fff; }
+    .tree-file i { font-size: 11px; flex-shrink: 0; color: var(--text-dim); }
+    .tree-file .fname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── Editor Column ── */
+    #editor-column { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+    #tabs-bar { min-height: 35px; background: var(--sidebar-bg); border-bottom: 1px solid var(--border);
+      display: flex; overflow-x: auto; overflow-y: hidden; flex-shrink: 0; }
+    #tabs-bar::-webkit-scrollbar { height: 3px; }
+    #tabs-bar::-webkit-scrollbar-thumb { background: var(--scrollbar); }
+
+    .tab {
+      height: 35px; padding: 0 10px; display: flex; align-items: center; gap: 6px;
+      background: var(--tab-inactive); border-right: 1px solid var(--border);
+      cursor: pointer; white-space: nowrap; font-size: 12px; color: var(--text-dim);
+      flex-shrink: 0; user-select: none; transition: background 0.1s;
+    }
+    .tab:hover { background: #333; color: var(--text); }
+    .tab.active { background: var(--tab-active); color: var(--text); border-top: 2px solid var(--accent); }
+    .tab i { font-size: 11px; }
+    .tab-close { width: 16px; height: 16px; border-radius: 3px; display: flex;
+      align-items: center; justify-content: center; font-size: 10px; color: transparent;
+      transition: background 0.1s, color 0.1s; }
+    .tab:hover .tab-close, .tab.active .tab-close { color: var(--text-dim); }
+    .tab-close:hover { background: rgba(255,255,255,0.15) !important; color: var(--text) !important; }
+
+    #editor-area { flex: 1; position: relative; overflow: hidden; }
+    #monaco-container { position: absolute; inset: 0; }
+    #preview-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: #fff; display: none; }
+
+    #preview-btn {
+      margin-left: auto; margin-right: 6px; align-self: center; flex-shrink: 0;
+      background: none; border: 1px solid var(--border); color: var(--text-dim);
+      font-size: 11px; font-family: inherit; border-radius: 4px; padding: 2px 8px;
+      cursor: pointer; display: flex; align-items: center; gap: 5px; white-space: nowrap;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    #preview-btn:hover { border-color: var(--accent); color: var(--text); }
+    #preview-btn.active { border-color: var(--accent); color: var(--accent); }
+
+    #editor-placeholder {
+      position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; background: var(--bg);
+      color: var(--text-dim); gap: 10px; pointer-events: none;
+    }
+    #editor-placeholder i { font-size: 52px; opacity: 0.12; }
+    #editor-placeholder p { font-size: 13px; opacity: 0.5; }
+
+    /* ── Chat Panel ── */
+    #chat-panel { width: 340px; min-width: 150px; max-width: 580px; flex-shrink: 0;
+      background: var(--sidebar-bg); border-left: none;
+      display: flex; flex-direction: column; overflow: hidden; }
+
+    #chat-header { padding: 0 12px; height: 35px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+
+    #chat-header-title { font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+
+#model-select {
+      background: var(--input-bg); border: 1px solid var(--border); color: var(--text);
+      font-size: 11px; font-family: inherit; border-radius: 4px; padding: 2px 6px;
+      cursor: pointer; outline: none; appearance: none; -webkit-appearance: none;
+    }
+    #model-select:hover { border-color: var(--accent); }
+
+    #clear-chat-btn { background: none; border: none; color: var(--text-dim); cursor: pointer;
+      font-size: 12px; padding: 3px 6px; border-radius: 3px; }
+    #clear-chat-btn:hover { color: var(--text); background: rgba(255,255,255,0.07); }
+
+    #add-agent-btn { background: none; border: none; color: var(--text-dim); cursor: pointer;
+      font-size: 12px; padding: 3px 6px; border-radius: 3px; }
+    #add-agent-btn:hover { color: var(--text); background: rgba(255,255,255,0.07); }
+
+    /* ── Agent Tabs ── */
+    #agent-tabs { display: none; padding: 4px 8px 0; flex-shrink: 0;
+      align-items: flex-end; gap: 3px; overflow-x: auto; }
+    #agent-tabs::-webkit-scrollbar { height: 0; }
+    #agent-tabs.visible { display: flex; }
+    .agent-tab { display: flex; align-items: center; gap: 5px; padding: 3px 10px;
+      border-radius: 5px 5px 0 0; font-size: 11px; color: var(--text-dim); cursor: pointer;
+      border: 1px solid var(--border); border-bottom: none; background: transparent;
+      white-space: nowrap; user-select: none; transition: background 0.12s, color 0.12s; }
+    .agent-tab:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+    .agent-tab.active { background: var(--sidebar-bg); color: var(--text); border-color: var(--border); }
+    .agent-tab .tab-close { opacity: 0.5; font-size: 9px; cursor: pointer;
+      line-height: 1; padding: 1px 2px; border-radius: 2px; margin-left: 2px; }
+    .agent-tab .tab-close:hover { opacity: 1; background: rgba(255,255,255,0.12); }
+    .agent-pane { display: flex; flex-direction: column; gap: 8px; }
+    .agent-pane.hidden { display: none; }
+
+    /* ── Learn Mode Toggle ── */
+    #learn-toggle {
+      display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none;
+      font-size: 10px; color: var(--text-dim); border: 1px solid var(--border);
+      border-radius: 12px; padding: 2px 8px 2px 5px; transition: border-color 0.15s, color 0.15s;
+    }
+    #learn-toggle:hover { border-color: var(--accent); color: var(--text); }
+    #learn-toggle.active { border-color: #22c55e; color: #22c55e; }
+    #learn-toggle .toggle-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim);
+      flex-shrink: 0; transition: background 0.15s;
+    }
+    #learn-toggle.active .toggle-dot { background: #22c55e; }
+
+    #chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex;
+      flex-direction: column; gap: 8px; }
+    #chat-messages::-webkit-scrollbar { width: 5px; }
+    #chat-messages::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+
+    .chat-msg { max-width: 94%; line-height: 1.5; }
+
+    .chat-msg.user { align-self: flex-end; background: var(--accent); color: #fff;
+      padding: 8px 11px; border-radius: 12px 12px 3px 12px; font-size: 13px;
+      white-space: pre-wrap; word-break: break-word; }
+
+    .chat-msg.bot { align-self: flex-start; background: var(--chat-bot-bg); padding: 10px 12px;
+      border-radius: 3px 12px 12px 12px; font-size: 13px; word-break: break-word; max-width: 100%; }
+    .chat-msg.bot p { margin: 3px 0; }
+    .chat-msg.bot p:first-child { margin-top: 0; }
+    .chat-msg.bot p:last-child { margin-bottom: 0; }
+    .chat-msg.bot ul, .chat-msg.bot ol { padding-left: 18px; margin: 4px 0; }
+    .chat-msg.bot li { margin: 2px 0; }
+    .chat-msg.bot pre { background: #1a1a1a; border: 1px solid var(--border); border-radius: 5px;
+      padding: 10px 12px; overflow-x: auto; margin: 6px 0; }
+    .chat-msg.bot pre code { font-family: 'Cascadia Code','Fira Code','Consolas',monospace;
+      font-size: 12px; background: none; padding: 0; }
+    .chat-msg.bot code { font-family: 'Cascadia Code','Fira Code','Consolas',monospace;
+      font-size: 12px; background: rgba(255,255,255,0.07); padding: 1px 5px; border-radius: 3px; }
+    .chat-msg.bot strong { color: #fff; }
+
+    .chat-msg.system { align-self: center; color: var(--text-dim); font-size: 11px;
+      font-style: italic; text-align: center; }
+
+    .typing-indicator { align-self: flex-start; background: var(--chat-bot-bg);
+      padding: 10px 14px; border-radius: 3px 12px 12px 12px;
+      display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 90%; }
+    .typing-timer { color: var(--text-dim); font-size: 11px; opacity: 0.7; }
+    .typing-text { color: var(--text-dim); font-size: 12px; font-style: italic;
+      animation: fadePhrase 0.4s ease; }
+    @keyframes fadePhrase {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    #chat-input-area { padding: 10px; border-top: 1px solid var(--border); flex-shrink: 0; }
+    #chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
+
+    #chat-input-resize-handle {
+      height: 5px; margin: 0 -10px 4px; cursor: ns-resize;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #chat-input-resize-handle::after {
+      content: ''; display: block; width: 32px; height: 3px;
+      border-radius: 2px; background: var(--border);
+      transition: background 0.15s;
+    }
+    #chat-input-resize-handle:hover::after { background: var(--text-dim); }
+
+    #chat-input {
+      flex: 1; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); padding: 8px 10px; font-size: 13px; font-family: inherit;
+      resize: none; min-height: 38px; max-height: 400px; line-height: 1.4; outline: none;
+      transition: border-color 0.15s;
+    }
+    #chat-input:focus { border-color: var(--accent); }
+    #chat-input::placeholder { color: var(--text-dim); }
+
+    #send-btn { width: 36px; height: 36px; background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text-dim); cursor: pointer; display: flex; align-items: center;
+      justify-content: center; font-size: 14px; flex-shrink: 0; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+    #send-btn:hover { background: rgba(255,255,255,0.14); color: var(--text); border-color: rgba(255,255,255,0.25); }
+    #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    #send-btn.stop-mode { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #ef4444; }
+    #send-btn.stop-mode:hover { background: rgba(239,68,68,0.28); border-color: rgba(239,68,68,0.7); }
+
+    #chat-stats { font-size: 10px; color: var(--text-dim); margin-top: 5px; display: flex; gap: 10px; }
+    #chat-stats span { opacity: 0.7; }
+    #input-hint { font-size: 10px; color: var(--text-dim); margin-top: 3px; text-align: right; }
+
+    /* ── Context Menu ── */
+    #ctx-menu {
+      position: fixed; z-index: 1000; background: #2d2d2d; border: 1px solid var(--border);
+      border-radius: 5px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); padding: 4px 0;
+      min-width: 130px; display: none;
+    }
+    .ctx-item {
+      padding: 7px 14px; font-size: 12px; cursor: pointer; color: var(--text);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .ctx-item:hover { background: rgba(255,255,255,0.08); }
+    .ctx-item.danger { color: #f87171; }
+    .ctx-item.danger:hover { background: rgba(248,113,113,0.1); }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header id="header">
+    <img src="Logo LMG Code.jpg" alt="LMG">
+    <h1>LMG Code</h1>
+    <span id="header-byline">by Simon ❤️</span>
+  </header>
+
+  <div id="workspace">
+
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div id="upload-toolbar">
+        <button class="upload-btn" id="btn-folder">
+          <i class="fa-solid fa-folder-open"></i> Öffnen
+        </button>
+        <button class="upload-btn" id="btn-save">
+          <i class="fa-solid fa-floppy-disk"></i> Speichern
+        </button>
+        <button class="upload-btn" id="btn-new" style="flex:0;padding:5px 10px;" title="Neue Datei">
+          <i class="fa-solid fa-plus"></i>
+        </button>
+        <button class="upload-btn" id="btn-delete" style="flex:0;padding:5px 10px;" title="Datei löschen">
+          <i class="fa-solid fa-minus"></i>
+        </button>
+      </div>
+      <div id="sidebar-label">Dateien</div>
+      <div id="file-tree">
+        <div class="tree-empty">
+          <i class="fa-solid fa-folder-open"></i>
+          Lade einen Ordner oder eine ZIP-Datei hoch, um loszulegen.
+        </div>
+      </div>
+    </aside>
+
+    <div class="resizer" id="resizer-left"></div>
+
+    <!-- Editor -->
+    <div id="editor-column">
+      <div id="tabs-bar">
+        <button id="preview-btn" title="Vorschau umschalten"><i class="fa-solid fa-play"></i> Vorschau</button>
+      </div>
+      <div id="editor-area">
+        <div id="monaco-container"></div>
+        <iframe id="preview-frame" sandbox="allow-scripts allow-forms allow-modals"></iframe>
+        <div id="editor-placeholder">
+          <i class="fa-solid fa-code"></i>
+          <p>Datei aus dem Baum öffnen</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="resizer" id="resizer-right"></div>
+
+    <!-- Chat -->
+    <div id="chat-panel">
+      <div id="agent-tabs"></div>
+      <div id="chat-header">
+        <div id="chat-header-title">
+          <i class="fa-solid fa-robot"></i>
+          <select id="model-select" title="Modell wählen">
+            <option value="qwen" selected>Qwen 3.6 Plus</option>
+            <option value="step">Step 3.5 Flash</option>
+            <option value="nemotron">Nemotron 3 Super</option>
+            <option value="gemma">Gemma 4 31B</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div id="learn-toggle" title="Lernmodus: Änderungen werden erklärt">
+            <span class="toggle-dot"></span>Lernmodus
+          </div>
+          <button id="add-agent-btn" title="Neuen Agenten spawnen">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+          <button id="clear-chat-btn" title="Chat leeren">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      </div>
+      <div id="chat-messages">
+        <!-- agent panes injected by JS -->
+      </div>
+      <div id="chat-input-area">
+        <div id="chat-input-resize-handle"></div>
+        <div id="chat-input-row">
+          <textarea id="chat-input" placeholder="Frage stellen…" rows="1"></textarea>
+          <button id="send-btn"><i class="fa-solid fa-arrow-up"></i></button>
+        </div>
+        <div id="chat-stats"></div>
+        <div id="input-hint">Ctrl+Enter senden</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div id="ctx-menu">
+  <div class="ctx-item" id="ctx-rename"><i class="fa-solid fa-pencil"></i> Umbenennen</div>
+  <div class="ctx-item danger" id="ctx-delete"><i class="fa-solid fa-trash"></i> Löschen</div>
+</div>
+
+<!-- Hidden file inputs -->
+<input type="file" id="folder-input" webkitdirectory multiple style="display:none">
+
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<script>
+// ── 1. State ─────────────────────────────────────────────────────────────────
+const vfs      = {};   // { path: { content, language, model } }
+let openTabs   = [];
+let activeTab  = null;
+let editor     = null;
+let liveMode   = true;
+let dirHandle  = null;  // File System Access API handle (wenn Ordner via showDirectoryPicker geöffnet)
+
+// ── Multi-Agent State ─────────────────────────────────────────────────────────
+const agents = new Map();
+let nextAgentId = 0;
+let activeAgentId = null;
+
+function createAgentPane(id) {
+  const pane = document.createElement('div');
+  pane.className = 'agent-pane hidden';
+  pane.dataset.agentId = id;
+  const welcome = document.createElement('div');
+  welcome.className = 'chat-msg system';
+  welcome.textContent = id === 0 ? 'Willkommen bei LMG Code!' : `Agent ${id + 1} bereit.`;
+  pane.appendChild(welcome);
+  document.getElementById('chat-messages').appendChild(pane);
+  return pane;
+}
+
+function createAgent() {
+  const id = nextAgentId++;
+  const pane = createAgentPane(id);
+  agents.set(id, {
+    id,
+    chatHistory: [],
+    learnMode: false,
+    isTyping: false,
+    cancelStream: null,
+    sessionTokens: 0,
+    model: 'qwen',
+    srStreamBase: null,
+    srStreamApplied: false,
+    messagesEl: pane,
+  });
+  return id;
+}
+
+function renderAgentTabs() {
+  const tabsEl = document.getElementById('agent-tabs');
+  const count = agents.size;
+  tabsEl.classList.toggle('visible', count > 1);
+  tabsEl.innerHTML = '';
+  for (const [id] of agents) {
+    const tab = document.createElement('div');
+    tab.className = 'agent-tab' + (id === activeAgentId ? ' active' : '');
+    const label = document.createElement('span');
+    label.textContent = `Agent ${id + 1}`;
+    tab.appendChild(label);
+    if (count > 1) {
+      const closeBtn = document.createElement('span');
+      closeBtn.className = 'tab-close';
+      closeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+      closeBtn.title = 'Agent schließen';
+      closeBtn.onclick = (e) => { e.stopPropagation(); removeAgent(id); };
+      tab.appendChild(closeBtn);
+    }
+    tab.onclick = () => switchAgent(id);
+    tabsEl.appendChild(tab);
+  }
+}
+
+function switchAgent(id) {
+  if (id === activeAgentId) return;
+  if (activeAgentId !== null) {
+    const cur = agents.get(activeAgentId);
+    if (cur) cur.messagesEl.classList.add('hidden');
+  }
+  activeAgentId = id;
+  const agent = agents.get(id);
+  agent.messagesEl.classList.remove('hidden');
+  document.getElementById('model-select').value = agent.model;
+  const learnToggle = document.getElementById('learn-toggle');
+  learnToggle.classList.toggle('active', agent.learnMode);
+  document.getElementById('send-btn').disabled = agent.isTyping;
+  const msgs = document.getElementById('chat-messages');
+  msgs.scrollTop = msgs.scrollHeight;
+  renderAgentTabs();
+}
+
+function addAgent() {
+  const id = createAgent();
+  renderAgentTabs();
+  switchAgent(id);
+}
+
+function removeAgent(id) {
+  if (agents.size <= 1) return;
+  const agent = agents.get(id);
+  if (agent?.messagesEl) agent.messagesEl.remove();
+  agents.delete(id);
+  if (id === activeAgentId) {
+    activeAgentId = null;
+    switchAgent(agents.keys().next().value);
+  } else {
+    renderAgentTabs();
+  }
+}
+
+// Init first agent
+(function initAgents() {
+  const id = createAgent();
+  activeAgentId = id;
+  agents.get(id).messagesEl.classList.remove('hidden');
+  renderAgentTabs();
+})();
+
+const TEXT_EXT = new Set([
+  'js','jsx','ts','tsx','mjs','cjs','py','pyw','html','htm','xhtml','css','scss','sass','less',
+  'json','json5','jsonc','md','mdx','txt','java','c','cpp','cc','cxx','h','hpp','hxx',
+  'cs','rb','php','rs','go','sql','xml','svg','yaml','yml','sh','bash','zsh','fish',
+  'toml','ini','cfg','conf','env','gitignore','gitattributes','editorconfig',
+  'dockerfile','makefile','cmake','gradle','properties','vue','svelte','astro',
+  'r','kt','kts','swift','dart','lua','pl','ex','exs','erl','hs','elm',
+  'clj','cljs','fs','fsx','ml','v','tf','hcl','prisma','graphql','gql'
+]);
+
+function isText(name) {
+  const lower = name.toLowerCase();
+  if (['dockerfile','makefile','.gitignore','.env','.env.example','.editorconfig'].includes(lower)) return true;
+  const ext = name.split('.').pop().toLowerCase();
+  return TEXT_EXT.has(ext);
+}
+
+function getLang(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  return ({
+    js:'javascript', jsx:'javascript', mjs:'javascript', cjs:'javascript',
+    ts:'typescript', tsx:'typescript',
+    py:'python', pyw:'python',
+    html:'html', htm:'html', xhtml:'html', vue:'html', svelte:'html',
+    css:'css', scss:'scss', sass:'scss', less:'less',
+    json:'json', json5:'json', jsonc:'json',
+    md:'markdown', mdx:'markdown',
+    java:'java', c:'c', cpp:'cpp', cc:'cpp', cxx:'cpp', h:'cpp', hpp:'cpp',
+    cs:'csharp', rb:'ruby', php:'php', rs:'rust', go:'go', kt:'kotlin', kts:'kotlin',
+    swift:'swift', dart:'dart', lua:'lua',
+    sql:'sql', xml:'xml', svg:'xml', yaml:'yaml', yml:'yaml',
+    sh:'shell', bash:'shell', zsh:'shell', fish:'shell',
+    toml:'ini', ini:'ini', cfg:'ini', conf:'ini', properties:'ini',
+    graphql:'graphql', gql:'graphql', prisma:'prisma',
+    r:'r', pl:'perl', ex:'elixir', exs:'elixir', hs:'haskell', elm:'elm',
+    clj:'clojure', fs:'fsharp',
+  })[ext] || 'plaintext';
+}
+
+function fileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  return ({
+    js:'fa-solid fa-bolt', jsx:'fa-solid fa-bolt', ts:'fa-solid fa-bolt', tsx:'fa-solid fa-bolt',
+    py:'fa-brands fa-python', html:'fa-solid fa-code', htm:'fa-solid fa-code',
+    css:'fa-solid fa-paintbrush', scss:'fa-solid fa-paintbrush', sass:'fa-solid fa-paintbrush',
+    json:'fa-solid fa-database', md:'fa-solid fa-file-lines',
+    java:'fa-brands fa-java', php:'fa-brands fa-php', rs:'fa-solid fa-gear',
+    go:'fa-solid fa-cube', sql:'fa-solid fa-database', sh:'fa-solid fa-terminal',
+    bash:'fa-solid fa-terminal', vue:'fa-brands fa-vuejs', swift:'fa-brands fa-swift',
+    kt:'fa-solid fa-k', dart:'fa-solid fa-d', rb:'fa-solid fa-gem',
+    yaml:'fa-solid fa-file-code', yml:'fa-solid fa-file-code',
+  })[ext] || 'fa-solid fa-file-code';
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+// ── 2. Virtual FS helpers ─────────────────────────────────────────────────────
+function addFile(rawPath, content) {
+  let path = rawPath.replace(/\\/g,'/').replace(/^\/+/,'');
+  if (!path) return;
+  if (path.startsWith('__MACOSX') || path.includes('/.DS_Store') || path.endsWith('.DS_Store')) return;
+  if (content.length > 200000) content = content.slice(0,200000) + '\n\n// [... Datei gekürzt ...]';
+  const name = path.split('/').pop();
+  vfs[path] = { content, language: getLang(name), model: null };
+}
+
+function clearVFS() {
+  Object.values(vfs).forEach(f => { if (f.model) { f.model.dispose(); f.model = null; } });
+  Object.keys(vfs).forEach(k => delete vfs[k]);
+  openTabs = [];
+  activeTab = null;
+  if (editor) editor.setModel(null);
+  document.getElementById('editor-placeholder').style.display = 'flex';
+  const bar = document.getElementById('tabs-bar');
+  const btn = document.getElementById('preview-btn');
+  bar.innerHTML = '';
+  bar.appendChild(btn);
+}
+
+// ── 3. File Tree ──────────────────────────────────────────────────────────────
+function renderTree() {
+  const tree = document.getElementById('file-tree');
+  const paths = Object.keys(vfs).sort();
+
+  if (!paths.length) {
+    tree.innerHTML = `<div class="tree-empty"><i class="fa-solid fa-folder-open"></i>
+      Lade einen Ordner oder eine ZIP-Datei hoch, um loszulegen.</div>`;
+    return;
+  }
+
+  // Group into root files and top-level folders
+  const rootFiles = [];
+  const folders   = {};  // folderName → [paths]
+
+  paths.forEach(p => {
+    const parts = p.split('/');
+    if (parts.length === 1) {
+      rootFiles.push(p);
+    } else {
+      const folder = parts[0];
+      if (!folders[folder]) folders[folder] = [];
+      folders[folder].push(p);
+    }
+  });
+
+  let html = '';
+
+  rootFiles.forEach(p => {
+    const name = p.split('/').pop();
+    const active = p === activeTab ? ' active' : '';
+    html += `<div class="tree-file${active}" data-path="${escAttr(p)}" title="${esc(p)}">
+      <i class="${fileIcon(name)}"></i><span class="fname">${esc(name)}</span></div>`;
+  });
+
+  Object.keys(folders).sort().forEach(folder => {
+    html += `<div class="tree-folder"><i class="fa-solid fa-folder"></i><span>${esc(folder)}</span></div>`;
+    folders[folder].forEach(p => {
+      const name   = p.split('/').pop();
+      const rel    = p.slice(folder.length + 1);
+      const depth  = rel.split('/').length; // 1 = direct child, 2+ = deeper
+      const indent = 24 + (depth - 1) * 12;
+      const active = p === activeTab ? ' active' : '';
+      html += `<div class="tree-file${active}" data-path="${escAttr(p)}" title="${esc(p)}"
+        style="padding-left:${indent}px">
+        <i class="${fileIcon(name)}"></i><span class="fname">${esc(name)}</span></div>`;
+    });
+  });
+
+  tree.innerHTML = html;
+}
+
+document.getElementById('file-tree').addEventListener('click', e => {
+  const el = e.target.closest('.tree-file');
+  if (el && el.dataset.path) openTab(el.dataset.path);
+});
+
+// ── 4. Tabs ───────────────────────────────────────────────────────────────────
+function renderTabs() {
+  const bar = document.getElementById('tabs-bar');
+  const btn = document.getElementById('preview-btn');
+
+  bar.innerHTML = openTabs.map(p => {
+    const name   = p.split('/').pop();
+    const active = p === activeTab ? ' active' : '';
+    return `<div class="tab${active}" data-path="${escAttr(p)}" title="${esc(p)}">
+      <i class="${fileIcon(name)}"></i>
+      <span>${esc(name)}</span>
+      <span class="tab-close" data-close="${escAttr(p)}"><i class="fa-solid fa-xmark"></i></span>
+    </div>`;
+  }).join('');
+
+  bar.appendChild(btn);
+
+  const activeEl = bar.querySelector('.tab.active');
+  if (activeEl) activeEl.scrollIntoView({ inline: 'nearest' });
+}
+
+document.getElementById('tabs-bar').addEventListener('click', e => {
+  const closeEl = e.target.closest('[data-close]');
+  if (closeEl) { closeTab(closeEl.dataset.close); return; }
+  const tab = e.target.closest('.tab');
+  if (tab && tab.dataset.path) switchTab(tab.dataset.path);
+});
+
+function openTab(path) {
+  if (!vfs[path]) return;
+  if (vfs[path].binary) {
+    // Binary file: only highlight in tree, don't open in editor
+    activeTab = path;
+    renderTree();
+    return;
+  }
+  if (!openTabs.includes(path)) openTabs.push(path);
+  switchTab(path);
+}
+
+function switchTab(path) {
+  if (!vfs[path]) return;
+  activeTab = path;
+
+  if (editor) {
+    if (!vfs[path].model) {
+      const uri = monaco.Uri.parse('file:///' + path.replace(/\s/g, '%20'));
+      vfs[path].model = monaco.editor.createModel(vfs[path].content, vfs[path].language, uri);
+      vfs[path].model.onDidChangeContent(() => { vfs[path].content = vfs[path].model.getValue(); });
+    }
+    editor.setModel(vfs[path].model);
+    document.getElementById('editor-placeholder').style.display = 'none';
+    editor.layout();
+  }
+
+  renderTabs();
+  renderTree();
+}
+
+function closeTab(path) {
+  const idx = openTabs.indexOf(path);
+  if (idx === -1) return;
+
+  if (vfs[path]?.model) { vfs[path].model.dispose(); vfs[path].model = null; }
+  openTabs.splice(idx, 1);
+
+  if (activeTab === path) {
+    const next = openTabs[idx] || openTabs[idx - 1] || null;
+    if (next) {
+      switchTab(next);
+    } else {
+      activeTab = null;
+      if (editor) editor.setModel(null);
+      document.getElementById('editor-placeholder').style.display = 'flex';
+        }
+  }
+
+  renderTabs();
+  renderTree();
+}
+
+// ── 5a. Resizable Panels ──────────────────────────────────────────────────────
+function initResizers() {
+  const sidebar   = document.getElementById('sidebar');
+  const chatPanel = document.getElementById('chat-panel');
+
+  function makeResizer(id, getStart, apply) {
+    const el = document.getElementById(id);
+    el.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startSize = getStart();
+      el.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      function onMove(e) {
+        apply(startSize, e.clientX - startX);
+        if (editor) editor.layout();
+      }
+      function onUp() {
+        el.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  makeResizer('resizer-left',
+    () => sidebar.offsetWidth,
+    (start, dx) => { sidebar.style.width = Math.max(80, Math.min(480, start + dx)) + 'px'; }
+  );
+  makeResizer('resizer-right',
+    () => chatPanel.offsetWidth,
+    (start, dx) => { chatPanel.style.width = Math.max(150, Math.min(580, start - dx)) + 'px'; }
+  );
+}
+
+// ── 5. Monaco Init ────────────────────────────────────────────────────────────
+function initMonaco() {
+  editor = monaco.editor.create(document.getElementById('monaco-container'), {
+    theme:                     'vs-dark',
+    automaticLayout:           false,
+    minimap:                   { enabled: false },
+    fontSize:                  13,
+    lineHeight:                20,
+    fontFamily:                "'Cascadia Code', 'Fira Code', Consolas, monospace",
+    fontLigatures:             true,
+    scrollBeyondLastLine:      false,
+    renderLineHighlight:       'line',
+    smoothScrolling:           true,
+    cursorSmoothCaretAnimation:'on',
+    padding:                   { top: 12, bottom: 12 },
+    wordWrap:                  'off',
+    tabSize:                   2,
+    insertSpaces:              true,
+    bracketPairColorization:   { enabled: true },
+    guides:                    { bracketPairs: true },
+  });
+
+  window.addEventListener('resize', () => editor && editor.layout());
+
+  // Ctrl+S / Cmd+S → Speichern
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    document.getElementById('btn-save').click();
+  });
+
+  // Open an empty untitled file so users can start coding right away
+  const untitled = 'Unbenannt';
+  vfs[untitled] = { content: '', language: 'plaintext', model: null };
+  openTab(untitled);
+
+  initResizers();
+}
+
+// ── 6. File Upload & Save ─────────────────────────────────────────────────────
+
+// Öffnen: versuche showDirectoryPicker (Chrome/Edge), fallback auf file input (Firefox)
+document.getElementById('btn-folder').onclick = async () => {
+  if ('showDirectoryPicker' in window) {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      dirHandle = handle;
+      clearVFS();
+      await readDirHandle(handle, handle.name + '/');
+      renderTree();
+      sysMsg(`Ordner geöffnet: ${Object.keys(vfs).length} Dateien`);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      // API nicht verfügbar oder Fehler → fallback
+    }
+  }
+  document.getElementById('folder-input').click();
+};
+
+async function readDirHandle(handle, prefix) {
+  for await (const [name, entry] of handle.entries()) {
+    if (entry.kind === 'directory') {
+      if (name.startsWith('.') || name === '__MACOSX' || name === 'node_modules') continue;
+      await readDirHandle(entry, prefix + name + '/');
+    } else {
+      if (name.startsWith('.') || name === '.DS_Store') continue;
+      if (isText(name)) {
+        try {
+          const file    = await entry.getFile();
+          const content = await file.text();
+          addFile(prefix + name, content);
+        } catch {}
+      } else {
+        const path = (prefix + name).replace(/\\/g,'/').replace(/^\/+/,'');
+        if (path && !path.startsWith('__MACOSX')) {
+          vfs[path] = { content: '', language: 'plaintext', model: null, binary: true };
+        }
+      }
+    }
+  }
+}
+
+document.getElementById('folder-input').addEventListener('change', async function(e) {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  dirHandle = null;
+
+  clearVFS();
+
+  for (const file of files) {
+    if (file.name.startsWith('.') || file.name === '.DS_Store') continue;
+    const path = file.webkitRelativePath;
+    if (!path) continue;
+    if (isText(file.name)) {
+      try {
+        const content = await file.text();
+        addFile(path, content);
+      } catch {}
+    } else {
+      const cleanPath = path.replace(/\\/g,'/').replace(/^\/+/,'');
+      if (cleanPath && !cleanPath.startsWith('__MACOSX')) {
+        vfs[cleanPath] = { content: '', language: 'plaintext', model: null, binary: true };
+      }
+    }
+  }
+
+  renderTree();
+  sysMsg(`Projekt geladen: ${Object.keys(vfs).length} Dateien`);
+  e.target.value = '';
+});
+
+// Speichern
+document.getElementById('btn-save').onclick = async () => {
+  if (dirHandle) {
+    // Alle Dateien zurück in den Ordner schreiben
+    let saved = 0, errors = 0;
+    for (const [path, file] of Object.entries(vfs)) {
+      const content = file.model ? file.model.getValue() : file.content;
+      try {
+        const parts = path.split('/');
+        let dir = dirHandle;
+        for (let i = 0; i < parts.length - 1; i++) {
+          dir = await dir.getDirectoryHandle(parts[i], { create: true });
+        }
+        const fh = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+        const wr = await fh.createWritable();
+        await wr.write(content);
+        await wr.close();
+        saved++;
+      } catch { errors++; }
+    }
+    sysMsg(`${saved} Datei(en) gespeichert${errors ? ` (${errors} Fehler)` : ''}.`);
+    return;
+  }
+
+  if (!activeTab || !vfs[activeTab]) {
+    sysMsg('Keine Datei geöffnet.');
+    return;
+  }
+
+  const content = vfs[activeTab].model ? vfs[activeTab].model.getValue() : vfs[activeTab].content;
+  const name    = activeTab.split('/').pop();
+
+  if ('showSaveFilePicker' in window) {
+    try {
+      const ext = name.includes('.') ? name.split('.').pop() : '';
+      const fh  = await window.showSaveFilePicker({
+        suggestedName: name,
+        types: ext ? [{ description: 'Datei', accept: { 'text/plain': ['.' + ext] } }] : [],
+      });
+      const wr = await fh.createWritable();
+      await wr.write(content);
+      await wr.close();
+      sysMsg(`${name} gespeichert.`);
+    } catch (e) {
+      if (e.name !== 'AbortError') sysMsg('Fehler beim Speichern.');
+    }
+  } else {
+    // Fallback: Download
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+  }
+};
+
+// Neue Datei
+document.getElementById('btn-new').onclick = () => {
+  const dir = activeTab && activeTab.includes('/')
+    ? activeTab.slice(0, activeTab.lastIndexOf('/') + 1)
+    : '';
+  let name = dir + 'Unbenannt';
+  let n = 1;
+  while (vfs[name]) { n++; name = dir + 'Unbenannt ' + n; }
+  vfs[name] = { content: '', language: 'plaintext', model: null };
+  openTab(name);
+  renderTree();
+  setTimeout(() => startRename(name), 80);
+};
+
+// Datei löschen
+document.getElementById('btn-delete').onclick = () => {
+  const path = activeTab;
+  if (!path || !vfs[path]) { sysMsg('Keine Datei ausgewählt.'); return; }
+  const name = path.split('/').pop();
+  if (openTabs.includes(path)) {
+    closeTab(path);
+  } else {
+    activeTab = null;
+  }
+  delete vfs[path];
+  renderTree();
+  sysMsg(`„${name}" gelöscht.`);
+};
+
+// ── 6b. File Tree Context Menu ───────────────────────────────────────────────
+let ctxPath = null;
+const ctxMenu = document.getElementById('ctx-menu');
+
+document.getElementById('file-tree').addEventListener('contextmenu', e => {
+  const el = e.target.closest('.tree-file');
+  if (!el || !el.dataset.path) return;
+  e.preventDefault();
+  ctxPath = el.dataset.path;
+  ctxMenu.style.left = e.clientX + 'px';
+  ctxMenu.style.top  = e.clientY + 'px';
+  ctxMenu.style.display = 'block';
+  requestAnimationFrame(() => {
+    const rect = ctxMenu.getBoundingClientRect();
+    if (rect.right  > window.innerWidth)  ctxMenu.style.left = (e.clientX - rect.width)  + 'px';
+    if (rect.bottom > window.innerHeight) ctxMenu.style.top  = (e.clientY - rect.height) + 'px';
+  });
+});
+
+document.addEventListener('click', () => { ctxMenu.style.display = 'none'; });
+
+document.getElementById('ctx-rename').onclick = e => {
+  e.stopPropagation();
+  ctxMenu.style.display = 'none';
+  if (ctxPath) startTreeRename(ctxPath);
+};
+
+document.getElementById('ctx-delete').onclick = e => {
+  e.stopPropagation();
+  ctxMenu.style.display = 'none';
+  if (!ctxPath || !vfs[ctxPath]) return;
+  const name = ctxPath.split('/').pop();
+  if (openTabs.includes(ctxPath)) closeTab(ctxPath);
+  else if (activeTab === ctxPath) activeTab = null;
+  delete vfs[ctxPath];
+  renderTree();
+  sysMsg(`„${name}" gelöscht.`);
+};
+
+function startTreeRename(path) {
+  renderTree();
+  const el = [...document.querySelectorAll('#file-tree .tree-file')].find(e => e.dataset.path === path);
+  if (!el) return;
+  const nameSpan = el.querySelector('.fname');
+  if (!nameSpan) return;
+  const oldName = path.split('/').pop();
+  const input = document.createElement('input');
+  input.value = oldName;
+  input.style.cssText = 'background:transparent;border:none;border-bottom:1px solid var(--accent);' +
+    'color:inherit;font:inherit;outline:none;width:' + Math.max(60, oldName.length * 7 + 20) + 'px;' +
+    'padding:0;margin:0;max-width:150px;';
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    finishRename(path, input.value.trim() || oldName);
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { committed = true; renderTree(); }
+  });
+  nameSpan.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+// ── 6c. Tab Rename ────────────────────────────────────────────────────────────
+document.getElementById('tabs-bar').addEventListener('dblclick', e => {
+  const tab = e.target.closest('.tab');
+  if (tab && tab.dataset.path) startRename(tab.dataset.path);
+});
+
+function startRename(path) {
+  renderTabs();
+  let targetTab = null;
+  document.querySelectorAll('#tabs-bar .tab').forEach(el => {
+    if (el.dataset.path === path) targetTab = el;
+  });
+  if (!targetTab) return;
+
+  const nameSpan = targetTab.querySelector('span:not(.tab-close)');
+  if (!nameSpan) return;
+
+  const oldName = path.split('/').pop();
+  const input   = document.createElement('input');
+  input.value   = oldName;
+  input.style.cssText = 'background:transparent;border:none;border-bottom:1px solid var(--accent);' +
+    'color:inherit;font:inherit;outline:none;width:' + Math.max(60, oldName.length * 7 + 20) + 'px;padding:0;margin:0;';
+
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    finishRename(path, input.value.trim() || oldName);
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { committed = true; renderTabs(); }
+  });
+
+  nameSpan.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+function finishRename(oldPath, newName) {
+  const dir     = oldPath.includes('/') ? oldPath.slice(0, oldPath.lastIndexOf('/') + 1) : '';
+  const newPath = dir + newName;
+
+  if (newPath === oldPath) { renderTabs(); return; }
+  if (vfs[newPath]) { sysMsg('Eine Datei mit diesem Namen existiert bereits.'); renderTabs(); return; }
+
+  const file     = vfs[oldPath];
+  const newLang  = getLang(newName);
+  const content  = file.model ? file.model.getValue() : file.content;
+
+  if (file.model) { file.model.dispose(); file.model = null; }
+  file.content  = content;
+  file.language = newLang;
+  vfs[newPath]  = file;
+  delete vfs[oldPath];
+
+  const tabIdx = openTabs.indexOf(oldPath);
+  if (tabIdx !== -1) openTabs[tabIdx] = newPath;
+
+  if (activeTab === oldPath) {
+    activeTab = newPath;
+    if (editor) {
+      const uri = monaco.Uri.parse('file:///' + newPath.replace(/\s/g, '%20'));
+      vfs[newPath].model = monaco.editor.createModel(content, newLang, uri);
+      vfs[newPath].model.onDidChangeContent(() => { vfs[newPath].content = vfs[newPath].model.getValue(); });
+      editor.setModel(vfs[newPath].model);
+    }
+  }
+
+  renderTabs();
+  renderTree();
+}
+
+
+// ── 8. Prompt Builder ─────────────────────────────────────────────────────────
+function buildPrompt(msg, agent) {
+  const learnExtra = agent.learnMode
+    ? `\n- LERNMODUS AKTIV: Erkläre jede Änderung ausführlich Schritt für Schritt — was wurde geändert, warum, und was bewirkt es. Der Schüler soll wirklich verstehen, was passiert.`
+    : `\n- Führe Aufgaben direkt aus. Antworte kurz und präzise — keine langen Einleitungen, kein Wiederholen der Aufgabe.
+- Wenn du Dateien analysierst bevor du antwortest, schreibe als erstes nur: "Schaue mir die Dateien an." — nichts anderes als Einleitung.`;
+
+  let p = `Du bist ein hilfreicher Coding-Assistent für Schüler am Leibniz-Montessori-Gymnasium Düsseldorf (Klassen 5–10).
+
+Regeln:
+- Schreibe Code nur, wenn der Schüler das explizit möchte (z.B. "bau", "schreib", "ergänze", "implementiere")
+- Bei offenen oder Meta-Fragen (z.B. "was könnte man ergänzen?", "wäre das sinnvoll?", "wie würde man das machen?") antworte nur mit Text — plane und diskutiere, ohne sofort Code zu schreiben
+- Beantworte NUR Fragen zu Programmierung und Informatik
+- Antworte in der Sprache des Schülers (Deutsch oder Englisch)
+- Verwende immer Markdown-Codeblöcke mit der richtigen Sprache (z.B. \`\`\`html)
+- Beginne NIEMALS mit "Verstanden", "Ich baue jetzt", "Natürlich" oder ähnlichen Einleitungen — starte direkt mit der Antwort oder (wenn Dateien vorhanden) mit "Schaue mir die Dateien an."${learnExtra}`;
+
+  const contextPaths = openTabs.length > 0
+    ? openTabs
+    : Object.keys(vfs).filter(p => !vfs[p].binary).sort();
+
+  if (contextPaths.length > 0) {
+    const label = openTabs.length > 0 ? 'geöffnete Tabs' : 'alle Projektdateien';
+    p += `\n\n### PROJEKTDATEIEN (${label}) ###\n`;
+    let totalChars = 0;
+    contextPaths.forEach(path => {
+      if (!vfs[path]) return;
+      if (totalChars > 200000) { p += `\n// [weitere Dateien ausgelassen — Kontextlimit erreicht]\n`; return; }
+      const raw = vfs[path].content;
+      const content = raw.length > 60000 ? raw.slice(0, 60000) + '\n// [... gekürzt]' : raw;
+      p += `\n--- ${path} (${vfs[path].language}) ---\n${content}\n`;
+      totalChars += content.length;
+    });
+    if (activeTab) p += `\n### AKTUELL SICHTBARE DATEI ###\n${activeTab}\n`;
+    p += `\nWICHTIG – Änderungen am Code:
+1. Lies zuerst den vorhandenen Code und finde die betroffene Stelle(n).
+2. Gib NUR die geänderte Stelle als SEARCH/REPLACE-Block aus:
+<<<<<<< SEARCH
+exakter alter Code (mind. 2–3 Zeilen Kontext drumherum)
+=======
+neuer Code
+>>>>>>> REPLACE
+3. Mehrere SEARCH/REPLACE-Blöcke sind erlaubt wenn mehrere Stellen geändert werden.
+4. Schreibe die GESAMTE Datei in einem einzigen Codeblock NUR wenn: (a) mehr als die Hälfte geändert wird, (b) eine neue Datei erstellt wird, oder (c) der Schüler explizit einen Komplett-Rewrite verlangt.
+VERBOTEN: Niemals nur einen Teil der Datei als Codeblock ausgeben — das löscht den Rest. Wenn unklar wie viel sich ändert: SEARCH/REPLACE verwenden.
+Der SEARCH-Text muss exakt so im Original stehen (Leerzeichen und Einrückung beachten).`;
+  }
+
+  if (agent.chatHistory.length > 0) {
+    p += '\n### BISHERIGES GESPRÄCH ###\n';
+    agent.chatHistory.slice(-10).forEach(m => {
+      p += `${m.role === 'user' ? 'Schüler' : 'Helper'}: "${m.text}"\n`;
+    });
+  }
+
+  p += `\n### AKTUELLE FRAGE ###\nSchüler: "${msg}"\nHelper:`;
+  return p;
+}
+
+// ── 9. Chat ───────────────────────────────────────────────────────────────────
+function activePane() {
+  return agents.get(activeAgentId)?.messagesEl ?? document.getElementById('chat-messages');
+}
+function scrollMsgs() {
+  document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+}
+
+function detectExtension(msg) {
+  const m = msg.toLowerCase();
+  if (/\b(website|webseite|html|webpage|web\s*page|landing\s*page|homepage)\b/.test(m)) return 'html';
+  if (/\bcss\b|\bstylesheet\b|\bstyles?\b/.test(m)) return 'css';
+  if (/\bpython\b|\b\.py\b/.test(m)) return 'py';
+  if (/\bjava\b(?!script)/.test(m)) return 'java';
+  if (/\bjavascript\b|\bjs\b|\b\.js\b/.test(m)) return 'js';
+  if (/\bphp\b/.test(m)) return 'php';
+  if (/\bc\+\+\b|\bcpp\b/.test(m)) return 'cpp';
+  if (/\bc#\b|\bcsharp\b/.test(m)) return 'cs';
+  return null;
+}
+
+function maybePromptRename(text, msgs) {
+  if (!activeTab) return Promise.resolve();
+  const name = activeTab.split('/').pop();
+  // Only prompt for files without extension (Unbenannt, Unbenannt 2, …)
+  if (!/^Unbenannt(\s+\d+)?$/.test(name)) return Promise.resolve();
+
+  const ext = detectExtension(text);
+  if (!ext) return Promise.resolve();
+
+  const newName = name + '.' + ext;
+
+  return new Promise(resolve => {
+    const d = document.createElement('div');
+    d.className = 'chat-msg system';
+    d.innerHTML = `„${name}" in <b>${newName}</b> umbenennen?&nbsp; ` +
+      `<button class="rename-btn" data-ans="1" style="margin-right:4px">[1] Ja</button>` +
+      `<button class="rename-btn" data-ans="2">[2] Nein</button>`;
+
+    const finish = (ans) => {
+      document.removeEventListener('keydown', keyHandler);
+      if (ans === '1') {
+        finishRename(activeTab, newName);
+        d.innerHTML = `✓ Umbenannt zu <b>${newName}</b>`;
+      } else {
+        d.innerHTML = `Dateiname bleibt „${name}".`;
+      }
+      resolve();
+    };
+
+    d.addEventListener('click', e => {
+      const btn = e.target.closest('[data-ans]');
+      if (btn) finish(btn.dataset.ans);
+    });
+
+    const keyHandler = e => {
+      if (e.key === '1') finish('1');
+      if (e.key === '2') finish('2');
+    };
+    document.addEventListener('keydown', keyHandler);
+
+    msgs.appendChild(d);
+    scrollMsgs();
+  });
+}
+
+function sysMsgHtml(html) {
+  const pane = activePane();
+  const d = document.createElement('div');
+  d.className = 'chat-msg system';
+  d.innerHTML = html;
+  pane.appendChild(d);
+  scrollMsgs();
+}
+
+function sysMsg(text) {
+  const pane = activePane();
+  const d = document.createElement('div');
+  d.className = 'chat-msg system';
+  d.textContent = text;
+  pane.appendChild(d);
+  scrollMsgs();
+}
+
+document.getElementById('learn-toggle').onclick = () => {
+  const agent = agents.get(activeAgentId);
+  agent.learnMode = !agent.learnMode;
+  const el = document.getElementById('learn-toggle');
+  el.classList.toggle('active', agent.learnMode);
+  sysMsg(agent.learnMode ? 'Lernmodus aktiviert — Änderungen werden erklärt.' : 'Lernmodus deaktiviert — kompakte Antworten.');
+};
+
+document.getElementById('model-select').onchange = () => {
+  const agent = agents.get(activeAgentId);
+  if (agent) agent.model = document.getElementById('model-select').value;
+};
+
+document.getElementById('clear-chat-btn').onclick = () => {
+  const agent = agents.get(activeAgentId);
+  agent.chatHistory = [];
+  agent.messagesEl.innerHTML = '<div class="chat-msg system">Chat geleert.</div>';
+};
+
+document.getElementById('add-agent-btn').onclick = () => addAgent();
+
+function updateChatStats(completionTokens, durationMs) {
+  const el = document.getElementById('chat-stats');
+  if (!el) return;
+  const parts = [];
+  if (completionTokens != null && durationMs > 0) {
+    const tps = Math.round(completionTokens / (durationMs / 1000));
+    parts.push(`<span>${tps} tok/s</span>`);
+  }
+  const agentTokens = agents.get(activeAgentId)?.sessionTokens ?? 0;
+  if (agentTokens > 0) {
+    parts.push(`<span>Session: ${agentTokens.toLocaleString('de-DE')} tok</span>`);
+  }
+  el.innerHTML = parts.join('<span style="opacity:0.3">·</span>');
+}
+
+// ── 7. Preview ────────────────────────────────────────────────────────────────
+
+let previewActive = false;
+
+function buildPreviewHtml() {
+  // Find an HTML entry point: active tab first, then any .html file
+  const htmlFile = (activeTab && activeTab.match(/\.html?$/i))
+    ? activeTab
+    : Object.keys(vfs).find(p => p.match(/\.html?$/i));
+  if (!htmlFile) return null;
+
+  let html = vfs[htmlFile].content;
+
+  // Inject all CSS files as <style> blocks (replacing <link> tags pointing to vfs files)
+  Object.entries(vfs).forEach(([path, file]) => {
+    if (!path.match(/\.css$/i)) return;
+    const filename = path.split('/').pop();
+    // Replace <link rel="stylesheet" href="filename.css"> with inline <style>
+    const linkRe = new RegExp(`<link[^>]+href=["']${filename}["'][^>]*>`, 'gi');
+    if (linkRe.test(html)) {
+      html = html.replace(linkRe, `<style>${file.content}<\/style>`);
+    } else {
+      html = html.replace('<\/head>', `<style>${file.content}<\/style><\/head>`);
+    }
+  });
+
+  // Inject all JS files as <script> blocks (replacing <script src="filename.js">)
+  Object.entries(vfs).forEach(([path, file]) => {
+    if (!path.match(/\.js$/i)) return;
+    const filename = path.split('/').pop();
+    const scriptRe = new RegExp(`<script[^>]+src=["']${filename}["'][^>]*><\/script>`, 'gi');
+    if (scriptRe.test(html)) {
+      html = html.replace(scriptRe, `<script>${file.content}<\/script>`);
+    }
+  });
+
+  return html;
+}
+
+function togglePreview() {
+  const frame = document.getElementById('preview-frame');
+  const btn   = document.getElementById('preview-btn');
+  const monaco = document.getElementById('monaco-container');
+  previewActive = !previewActive;
+
+  if (previewActive) {
+    const html = buildPreviewHtml();
+    if (!html) {
+      previewActive = false;
+      sysMsg('Keine HTML-Datei im Projekt gefunden.');
+      return;
+    }
+    frame.srcdoc = html;
+    frame.style.display = 'block';
+    monaco.style.display = 'none';
+    btn.classList.add('active');
+    btn.innerHTML = '<i class="fa-solid fa-code"></i> Editor';
+  } else {
+    frame.style.display = 'none';
+    frame.srcdoc = '';
+    monaco.style.display = 'block';
+    btn.classList.remove('active');
+    btn.innerHTML = '<i class="fa-solid fa-play"></i> Vorschau';
+    if (editor) editor.layout();
+  }
+}
+
+document.getElementById('preview-btn').onclick = togglePreview;
+
+// ── 9b. Streaming helpers ─────────────────────────────────────────────────────
+
+function extractStreamingCode(text) {
+  // Don't live-update during streaming if it's a SEARCH/REPLACE response (full or partial)
+  if (text.includes('<<<<<<<')) return null;
+  // Matches an open or closed code block — returns code content
+  const match = text.match(/```[\w]*\n([\s\S]*?)(?:```|$)/);
+  return match ? match[1] : null;
+}
+
+function applySearchReplace(text, currentContent) {
+  const blockPattern = /<<<<<<< SEARCH\r?\n([\s\S]*?)\r?\n=======\r?\n([\s\S]*?)\r?\n>>>>>>> REPLACE/g;
+  let result = currentContent;
+  let applied = 0, added = 0, removed = 0;
+  let match;
+  while ((match = blockPattern.exec(text)) !== null) {
+    const search = match[1];
+    const replace = match[2];
+    if (result.includes(search)) {
+      result = result.replace(search, replace);
+      removed += search.split('\n').length;
+      added   += replace.split('\n').length;
+      applied++;
+    }
+  }
+  return applied > 0 ? { content: result, count: applied, added, removed } : null;
+}
+
+async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, agent, registerAbort) {
+  const controller = new AbortController();
+  registerAbort?.(() => { controller._manualAbort = true; controller.abort(); });
+  const timer = setTimeout(() => controller.abort(), 57000);
+
+  let res;
+  try {
+    res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: builtPrompt, model: modelKey, stream: true }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') {
+      if (controller._manualAbort) return { aborted: true };
+      return { error: 'Timeout', retryable: true };
+    }
+    throw err;
+  }
+
+  if (!res.ok) {
+    try { const d = await res.json(); return { error: d.error, retryable: res.status === 429 || res.status === 503 }; }
+    catch { return { error: 'Serverfehler', retryable: res.status === 429 || res.status === 503 }; }
+  }
+
+  // Stream connected — only now dismiss the typing indicator
+  onStreamStart();
+
+  let fullText = '';
+  let rafPending = false;
+  let gotDone = false;
+  let streamUsage = null;
+
+  let srNotified = false;
+  function scheduleMonacoUpdate() {
+    if (rafPending || !activeTab || !vfs[activeTab]?.model) return;
+    // Capture original content on very first call — before any streaming write can corrupt it
+    if (agent.srStreamBase === null) agent.srStreamBase = vfs[activeTab].model.getValue();
+    rafPending = true;
+    requestAnimationFrame(() => {
+      rafPending = false;
+      if (fullText.includes('<<<<<<< SEARCH')) {
+        // Live-apply each completed SEARCH/REPLACE block as it arrives
+        if (!srNotified) { srNotified = true; onSRDetected?.(); }
+        const result = applySearchReplace(fullText, agent.srStreamBase);
+        if (result) {
+          agent.srStreamApplied = true;
+          vfs[activeTab].model.setValue(result.content);
+          vfs[activeTab].content = result.content;
+        }
+      } else {
+        const code = extractStreamingCode(fullText);
+        if (code !== null && vfs[activeTab]?.model) {
+          vfs[activeTab].model.setValue(code);
+          vfs[activeTab].content = code;
+        }
+      }
+    });
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let sseBuffer = '';
+
+  try {
+    outer: while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      sseBuffer += decoder.decode(value, { stream: true });
+      const lines = sseBuffer.split('\n');
+      sseBuffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') { gotDone = true; break outer; }
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.error) return { error: parsed.error, retryable: !!parsed.retryable };
+          if (parsed.usage) streamUsage = parsed.usage;
+          const delta = parsed.choices?.[0]?.delta?.content ?? '';
+          if (delta) { fullText += delta; scheduleMonacoUpdate(); }
+        } catch {}
+      }
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') throw err;
+  }
+
+  // Stream ended without [DONE] and no content → retryable (Vercel/model timeout)
+  if (!gotDone && !fullText) return { error: 'Timeout', retryable: true };
+
+  return {
+    text: fullText,
+    promptTokens: streamUsage?.prompt_tokens ?? null,
+    completionTokens: streamUsage?.completion_tokens ?? null,
+  };
+}
+
+const FALLBACK_CHAINS = {
+  qwen:     ['qwen', 'step', 'nemotron', 'gemma'],
+  step:     ['step', 'nemotron', 'qwen', 'gemma'],
+  nemotron: ['nemotron', 'step', 'qwen', 'gemma'],
+  gemma:    ['gemma', 'qwen', 'step', 'nemotron'],
+};
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  const agent = agents.get(activeAgentId);
+  if (!text || agent.isTyping) return;
+  agent.srStreamBase    = null;
+  agent.srStreamApplied = false;
+
+  input.value = '';
+  input.style.height = 'auto';
+
+  const msgs = agent.messagesEl;
+  const msgsScroll = document.getElementById('chat-messages');
+
+  // User bubble
+  const userDiv = document.createElement('div');
+  userDiv.className = 'chat-msg user';
+  userDiv.textContent = text;
+  msgs.appendChild(userDiv);
+
+  // Rename prompt (if unnamed file + detectable extension)
+  await maybePromptRename(text, msgs);
+
+  // Typing indicator
+  const thinkingPhrases = [
+    'Was wollte die Aufgabe eigentlich von mir…?',
+    'Kurz so tun, als hätte ich das im Unterricht gehört…',
+    'Halb vergessenes Wissen reanimieren...',
+    'Irgendwas hinschreiben, sieht schlau aus...',
+    'Das wirkt strukturiert genug...',
+    'YOLO – Ansatz wird schon passen...',
+    'Formel einsetzen und zu Herr Hüwe beten...',
+    'Ergebnis sieht verdächtig aus... egal.',
+    'Schön formatieren für halbe Extrapunkte...',
+    'So erklären, dass es kompetent klingt...',
+    'Abgeben und innerlich verabschieden…',
+    'Absolutes Kino hier…',
+    'Marcus würde lachen wenn er das sieht…',
+    'Herr Fuhs und seine Aufgaben…',
+    'Wann bekommt das LMG endlich vernünftige Rechner…',
+    'Einfach mal die Formel von letztem Jahr recyclen...',
+    'Gehirn im Energiesparmodus – hoffentlich reicht\'s...',
+    'Das sieht aus wie eine Lösung, also ist es eine...',
+    'Schnell noch \'ne Einheit hinzufügen, damit\'s professionell wirkt...',
+    'Wahrscheinlich falsch, aber ästhetisch einwandfrei...',
+    'Herr Hüwe würde sagen: „Fast richtig" – das reicht mir...',
+    'Kurze Panik, dann kreative Interpretation der Aufgabenstellung...',
+    'Taschenrechner hat auch schon aufgegeben...',
+    'So tun, als wäre das der elegante Weg zur Lösung...',
+    'Ergebnis auf 3 Nachkommastellen runden und beten...',
+    'Marcus würde sagen: „Bro, das ist Kunst"...',
+    'LMG-Rechner hätten das in 0,2 Sekunden erledigt...',
+    'Halb richtig ist immerhin besser als gar nicht abgegeben...',
+    'Das muss jetzt einfach stimmen, mein Karma hängt dran...',
+    'Abgeben, weggehen und nie wieder dran denken...',
+  ];
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'typing-indicator';
+  const typingTimer = document.createElement('span');
+  typingTimer.className = 'typing-timer';
+  typingTimer.textContent = 'Denkt nach…';
+  typingDiv.appendChild(typingTimer);
+  const typingText = document.createElement('span');
+  typingText.className = 'typing-text';
+  let phraseIdx = Math.floor(Math.random() * thinkingPhrases.length);
+  typingText.textContent = thinkingPhrases[phraseIdx];
+  typingDiv.appendChild(typingText);
+  msgs.appendChild(typingDiv);
+  msgsScroll.scrollTop = msgsScroll.scrollHeight;
+  let thinkSecs = 0;
+  const timerInterval = setInterval(() => {
+    thinkSecs++;
+    typingTimer.textContent = `Denkt nach für ${thinkSecs} Sekunde${thinkSecs === 1 ? '' : 'n'}…`;
+  }, 1000);
+  const phraseInterval = setInterval(() => {
+    phraseIdx = (phraseIdx + 1) % thinkingPhrases.length;
+    typingText.style.animation = 'none';
+    typingText.offsetHeight; // reflow
+    typingText.style.animation = '';
+    typingText.textContent = thinkingPhrases[phraseIdx];
+  }, 3000);
+
+  agent.isTyping = true;
+  const sendBtn = document.getElementById('send-btn');
+  sendBtn.disabled = false;
+  sendBtn.classList.add('stop-mode');
+  sendBtn.querySelector('i').className = 'fa-solid fa-stop';
+
+  const t0 = Date.now();
+  try {
+  const selectedModel = document.getElementById('model-select').value;
+  agent.model = selectedModel;
+  const chain = FALLBACK_CHAINS[selectedModel] ?? FALLBACK_CHAINS.qwen;
+  const builtPrompt = buildPrompt(text, agent);
+  let data = null, networkError = false, errorHandled = false, durationMs = 0;
+
+  if (liveMode) {
+    // ── Streaming path with fallback chain ────────────────────────────────────
+    let streamStarted = false;
+    function onStreamStart() {
+      if (streamStarted) return;
+      streamStarted = true;
+      clearInterval(phraseInterval);
+      const hasContent = activeTab && vfs[activeTab]?.content?.trim();
+      const vfsHasFiles = Object.keys(vfs).length > 0;
+      typingTimer.textContent = hasContent ? 'Lese Code…' : vfsHasFiles ? 'Schaue Dateien an…' : 'Schreibe…';
+      typingText.style.animation = 'none'; void typingText.offsetHeight; typingText.style.animation = '';
+      typingText.textContent = hasContent
+        ? `Lass mich die Stelle in ${activeTab} suchen…`
+        : vfsHasFiles
+          ? `Schaue mir die Dateien an…`
+          : `Verstanden. Ich baue jetzt ${activeTab || 'den Code'}.`;
+    }
+    let srShown = false;
+    function onSRDetected() {
+      if (srShown) return;
+      srShown = true;
+      typingTimer.textContent = 'Edit läuft…';
+      typingText.style.animation = 'none'; void typingText.offsetHeight; typingText.style.animation = '';
+      typingText.textContent = 'Gefunden. Starte Edit.';
+    }
+    try {
+      for (const modelKey of chain) {
+        const result = await fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, agent,
+          fn => { agent.cancelStream = fn; });
+        agent.cancelStream = null;
+        if (result.text !== undefined) { data = result; break; }
+        if (result.aborted) { errorHandled = true; break; }
+        if (!result.retryable) { sysMsg('Fehler: ' + result.error); errorHandled = true; break; }
+        // retryable (timeout / 429) → try next model in chain
+      }
+    } catch (err) {
+      networkError = true;
+    }
+    clearInterval(phraseInterval); clearInterval(timerInterval); typingDiv.remove();
+    durationMs = Date.now() - t0;
+  } else {
+    // ── Non-streaming fallback chain ──────────────────────────────────────────
+    let res = null;
+    for (const modelKey of chain) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 57000);
+      try {
+        res = await fetch('/api/chat', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ prompt: builtPrompt, model: modelKey }),
+          signal:  controller.signal,
+        });
+        clearTimeout(timer);
+        data = await res.json();
+        if (res.ok && !data.error) break;      // success
+        if (!data.retryable) break;            // fatal error, stop
+        data = null;                           // retryable → try next model
+      } catch (err) {
+        clearTimeout(timer);
+        if (err.name !== 'AbortError') { networkError = true; break; }
+        // AbortError = timeout → try next model
+      }
+    }
+    durationMs = Date.now() - t0;
+    clearInterval(phraseInterval); clearInterval(timerInterval); typingDiv.remove();
+    if (data && (data.error || !res?.ok)) {
+      sysMsg('Fehler: ' + (data?.error || 'Alle Modelle nicht erreichbar.'));
+      errorHandled = true;
+      data = null;
+    }
+  }
+
+  if (networkError) {
+    sysMsg('Netzwerkfehler – bitte erneut versuchen.');
+  } else if (!data && !errorHandled) {
+    sysMsg('Fehler: Alle Modelle nicht erreichbar.');
+  } else if (data) {
+      // Auto-apply: SEARCH/REPLACE-Blöcke oder (fallback) genau ein Codeblock
+      // Use srStreamBase if streaming already applied blocks (so stats are computed against original)
+      const srBase = agent.srStreamBase !== null ? agent.srStreamBase
+                   : (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
+      const srResult = srBase ? applySearchReplace(data.text, srBase) : null;
+      const codeBlockMatch = !srResult ? [...data.text.matchAll(/```[\w]*\n([\s\S]*?)```/g)] : [];
+      const hasFullBlock = !srResult && codeBlockMatch.length === 1 && activeTab && vfs[activeTab];
+      const didAutoApply = !!(srResult || hasFullBlock);
+
+      if (didAutoApply && !agent.learnMode) {
+        const fname = activeTab || 'Datei';
+        const action = srResult ? 'angepasst' : 'erstellt';
+        const doneMessages = [
+          `Erledigt. ${fname} wurde ${action}.`,
+          `Fertig — ${fname} wurde ${action}.`,
+          `Gemacht. ${fname} ist jetzt ${action}.`,
+          `${fname} wurde ${action}. Schau mal rein.`,
+          `Passt. ${fname} ist aktualisiert.`,
+          `${fname} ist bereit.`,
+          `Alles drin. ${fname} wurde ${action}.`,
+          `${fname} wurde ${action} — sieh es dir an.`,
+        ];
+        const quipDiv = document.createElement('div');
+        quipDiv.className = 'chat-msg bot';
+        quipDiv.textContent = doneMessages[Math.floor(Math.random() * doneMessages.length)];
+        msgs.appendChild(quipDiv);
+      } else {
+        const botDiv = document.createElement('div');
+        botDiv.className = 'chat-msg bot';
+        // Wrap SEARCH/REPLACE blocks in code fences so marked.js doesn't misparse '=======' as a setext heading
+        const safeText = data.text.replace(
+          /(<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE)/g,
+          '```\n$1\n```'
+        );
+        botDiv.innerHTML = marked.parse(safeText);
+        if (/<<<<<<< SEARCH/.test(data.text) && !srResult) {
+          sysMsgHtml('⚠ Konnte nicht automatisch angewendet werden — Suche fand keine exakte Übereinstimmung.');
+        }
+        msgs.appendChild(botDiv);
+      }
+
+      if (srResult) {
+        if (!agent.srStreamApplied) {
+          // Non-streaming mode: apply now
+          vfs[activeTab].content = srResult.content;
+          vfs[activeTab].model.setValue(srResult.content);
+        }
+        sysMsgHtml(`✓ ${srResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${srResult.added}</span> <span style="color:#f44336">−${srResult.removed}</span>`);
+      } else if (hasFullBlock) {
+        const newCode = codeBlockMatch[0][1].replace(/\n$/, '');
+        const isEmpty = vfs[activeTab].content.trim() === '';
+        const oldLines = isEmpty ? 0 : (vfs[activeTab].content.match(/\n/g) || []).length + 1;
+        const newLines = (newCode.match(/\n/g) || []).length + 1;
+        // Guard: if new code is less than 50% of original, it's likely a partial — don't overwrite
+        if (!isEmpty && newLines < oldLines * 0.5) {
+          sysMsgHtml(`⚠ Modell hat nur einen Teil ausgegeben (${newLines} von ${oldLines} Zeilen) — Datei wurde <b>nicht</b> überschrieben. Bitte SEARCH/REPLACE verwenden oder Änderung manuell einfügen.`);
+        } else {
+          vfs[activeTab].content = newCode;
+          vfs[activeTab].model.setValue(newCode);
+          sysMsgHtml(`✓ ${activeTab} wurde aktualisiert &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
+        }
+      }
+
+      agent.chatHistory.push({ role: 'user', text });
+      agent.chatHistory.push({ role: 'bot',  text: data.text });
+      if (agent.chatHistory.length > 20) agent.chatHistory = agent.chatHistory.slice(-20);
+
+      const ct = data.completionTokens ?? null;
+      const pt = data.promptTokens ?? null;
+      if (ct != null) agent.sessionTokens += ct;
+      if (pt != null) agent.sessionTokens += pt;
+      updateChatStats(ct, durationMs);
+  }
+
+  } finally {
+    agent.isTyping = false;
+    agent.cancelStream = null;
+    const _sb = document.getElementById('send-btn');
+    _sb.classList.remove('stop-mode');
+    _sb.querySelector('i').className = 'fa-solid fa-arrow-up';
+    _sb.disabled = false;
+    msgsScroll.scrollTop = msgsScroll.scrollHeight;
+  }
+}
+
+document.getElementById('send-btn').onclick = function() {
+  const agent = agents.get(activeAgentId);
+  if (agent?.isTyping && agent.cancelStream) {
+    agent.cancelStream();
+  } else {
+    sendMessage();
+  }
+};
+
+const chatInput = document.getElementById('chat-input');
+let chatInputManualHeight = null;
+
+chatInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(); return; }
+  if (chatInputManualHeight === null) {
+    setTimeout(() => {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 400) + 'px';
+    }, 0);
+  }
+});
+
+// Drag handle to resize chat input upward
+(function() {
+  const handle = document.getElementById('chat-input-resize-handle');
+  let startY, startH;
+  handle.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    startY = e.clientY;
+    startH = chatInput.getBoundingClientRect().height;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(e) {
+      const delta = startY - e.clientY;
+      const newH = Math.min(400, Math.max(38, startH + delta));
+      chatInput.style.height = newH + 'px';
+      chatInputManualHeight = newH;
+    }
+    function onUp() {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+// Warn on unload
+window.addEventListener('beforeunload', e => {
+  if (Object.keys(vfs).length > 0) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ── 10. Monaco Loader ─────────────────────────────────────────────────────────
+window.MonacoEnvironment = {
+  getWorkerUrl(_moduleId, _label) {
+    return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+      self.MonacoEnvironment = { baseUrl: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/' };
+      importScripts('https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/base/worker/workerMain.js');
+    `)}`;
+  }
+};
+
+const ms = document.createElement('script');
+ms.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js';
+ms.onload = () => {
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' } });
+  require(['vs/editor/editor.main'], initMonaco);
+};
+document.head.appendChild(ms);
+</script>
+</body>
+</html>
