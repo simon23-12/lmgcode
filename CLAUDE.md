@@ -1,7 +1,7 @@
 # LMG Code
 
 **Type:** HTML, JS, CSS  
-**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–10) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
+**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–13) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
 **URL:** https://lmgcode.vercel.app  
 **Vercel-Projekt:** simons-projects-56ea3d55/lmgcode
 
@@ -146,11 +146,4 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 
 Der Assistent **schreibt Code wenn gewünscht** — er ist kein Lehrer der nur Hinweise gibt. Er erklärt kurz was der Code macht, hält Erklärungen aber knapp. Antwortet in der Sprache des Schülers (DE/EN).
 
-## Deployment
 
-```bash
-cd "/Users/sim/Documents/LMG Code"
-vercel --prod --yes
-```
-
-Vercel setzt den API-Key automatisch (bereits konfiguriert unter Settings → Environment Variables).
