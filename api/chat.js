@@ -1,20 +1,28 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const GEMMA_MODEL = "gemma-4-31b-it";
+const GOOGLE_MODELS = {
+  gemma:           "gemma-4-31b-it",
+  geminiflashlite: "gemini-3.1-flash-lite-preview",
+};
 
 const MODEL_MAP = {
-  qwen:     'qwen/qwen3.6-plus:free',
-  step:     'stepfun/step-3.5-flash:free',
-  nemotron: 'nvidia/nemotron-3-super-120b-a12b:free',
-  gemma:    'gemma',
+  qwen:             'qwen/qwen3.6-plus:free',
+  step:             'stepfun/step-3.5-flash:free',
+  nemotron:         'nvidia/nemotron-3-super-120b-a12b:free',
+  gemma:            'gemma',
+  geminiflashlite:  'geminiflashlite',
 };
+
+function isGoogleModel(target) {
+  return target === 'gemma' || target === 'geminiflashlite';
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { prompt, model = 'qwen', stream = false } = req.body;
+  const { prompt, model = 'geminiflashlite', stream = false } = req.body;
 
   if (!prompt || typeof prompt !== 'string') {
     return res.status(400).json({ error: 'Kein Prompt angegeben.' });
@@ -31,8 +39,8 @@ export default async function handler(req, res) {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
     try {
-      if (target === 'gemma') {
-        await streamGemma(prompt, res);
+      if (isGoogleModel(target)) {
+        await streamGoogleAI(prompt, GOOGLE_MODELS[target], res);
       } else {
         await streamOpenRouter(prompt, target, res);
       }
@@ -45,8 +53,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = target === 'gemma'
-      ? await tryGemma(prompt)
+    const result = isGoogleModel(target)
+      ? await tryGoogleAI(prompt, GOOGLE_MODELS[target])
       : await tryOpenRouter(prompt, target);
     return res.status(200).json(result);
   } catch (err) {
@@ -101,11 +109,11 @@ async function streamOpenRouter(prompt, orModel, res) {
   }
 }
 
-async function streamGemma(prompt, res) {
+async function streamGoogleAI(prompt, googleModel, res) {
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
-  const gemmaModel = genAI.getGenerativeModel({ model: GEMMA_MODEL });
+  const gModel = genAI.getGenerativeModel({ model: googleModel });
   try {
-    const result = await gemmaModel.generateContentStream(prompt);
+    const result = await gModel.generateContentStream(prompt);
     for await (const chunk of result.stream) {
       const parts = chunk.candidates?.[0]?.content?.parts ?? [];
       const text = parts.filter(p => !p.thought).map(p => p.text ?? '').join('');
@@ -122,7 +130,7 @@ async function streamGemma(prompt, res) {
     const retryable =
       err.status === 429 || err.status === 503 ||
       msg.includes('429') || msg.includes('503') || msg.includes('rate limit') || msg.includes('overload');
-    const e = new Error(err.message || 'Gemma-Fehler.');
+    const e = new Error(err.message || 'Google AI Fehler.');
     if (!retryable) e.fatal = true;
     throw e;
   }
@@ -173,11 +181,11 @@ async function tryOpenRouter(prompt, orModel) {
   };
 }
 
-async function tryGemma(prompt) {
+async function tryGoogleAI(prompt, googleModel) {
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
   try {
-    const gemmaModel = genAI.getGenerativeModel({ model: GEMMA_MODEL });
-    const result = await gemmaModel.generateContent(prompt);
+    const gModel = genAI.getGenerativeModel({ model: googleModel });
+    const result = await gModel.generateContent(prompt);
     const meta = result.response.usageMetadata ?? {};
     const parts = result.response.candidates?.[0]?.content?.parts ?? [];
     const text = parts.length ? parts.filter(p => !p.thought).map(p => p.text ?? '').join('') : result.response.text();
@@ -192,10 +200,10 @@ async function tryGemma(prompt) {
       err.status === 429 || err.status === 503 ||
       msg.includes('429') || msg.includes('503') || msg.includes('rate limit') || msg.includes('overload');
     if (!retryable) {
-      const fatal = new Error(err.message || 'Gemma-Fehler.');
+      const fatal = new Error(err.message || 'Google AI Fehler.');
       fatal.fatal = true;
       throw fatal;
     }
-    throw new Error(err.message || 'Gemma nicht erreichbar.');
+    throw new Error(err.message || 'Google AI nicht erreichbar.');
   }
 }
