@@ -315,7 +315,7 @@
       <div id="file-tree">
         <div class="tree-empty">
           <i class="fa-solid fa-folder-open"></i>
-          Lade einen Ordner oder eine ZIP-Datei hoch, um loszulegen.
+          Lade einen Ordner hoch oder erstelle eine neue Datei mit dem Plus-Button.
         </div>
       </div>
     </aside>
@@ -431,6 +431,7 @@ function createAgent() {
     model: 'qwen',
     srStreamBase: null,
     srStreamApplied: false,
+    streamCreatedFile: null,
     messagesEl: pane,
   });
   return id;
@@ -569,6 +570,8 @@ function addFile(rawPath, content) {
   if (path.startsWith('__MACOSX') || path.includes('/.DS_Store') || path.endsWith('.DS_Store')) return;
   if (content.length > 200000) content = content.slice(0,200000) + '\n\n// [... Datei gekürzt ...]';
   const name = path.split('/').pop();
+  // Dispose old Monaco model so the URI is freed — prevents stale model being reused
+  if (vfs[path]?.model) { vfs[path].model.dispose(); }
   vfs[path] = { content, language: getLang(name), model: null };
 }
 
@@ -592,7 +595,7 @@ function renderTree() {
 
   if (!paths.length) {
     tree.innerHTML = `<div class="tree-empty"><i class="fa-solid fa-folder-open"></i>
-      Lade einen Ordner oder eine ZIP-Datei hoch, um loszulegen.</div>`;
+      Lade einen Ordner hoch oder erstelle eine neue Datei mit dem Plus-Button.</div>`;
     return;
   }
 
@@ -689,6 +692,9 @@ function switchTab(path) {
   if (editor) {
     if (!vfs[path].model) {
       const uri = monaco.Uri.parse('file:///' + path.replace(/\s/g, '%20'));
+      // If a stale model with this URI exists, dispose it first
+      const stale = monaco.editor.getModel(uri);
+      if (stale) stale.dispose();
       vfs[path].model = monaco.editor.createModel(vfs[path].content, vfs[path].language, uri);
       vfs[path].model.onDidChangeContent(() => { vfs[path].content = vfs[path].model.getValue(); });
     }
@@ -793,10 +799,7 @@ function initMonaco() {
     document.getElementById('btn-save').click();
   });
 
-  // Open an empty untitled file so users can start coding right away
-  const untitled = 'Unbenannt';
-  vfs[untitled] = { content: '', language: 'plaintext', model: null };
-  openTab(untitled);
+  // No auto-open — user starts by creating a file or uploading
 
   initResizers();
 }
@@ -1115,7 +1118,7 @@ Regeln:
 - Bei offenen oder Meta-Fragen (z.B. "was könnte man ergänzen?", "wäre das sinnvoll?", "wie würde man das machen?") antworte nur mit Text — plane und diskutiere, ohne sofort Code zu schreiben
 - Beantworte NUR Fragen zu Programmierung und Informatik
 - Antworte in der Sprache des Schülers (Deutsch oder Englisch)
-- Verwende immer Markdown-Codeblöcke mit der richtigen Sprache (z.B. \`\`\`html)
+- Verwende immer Markdown-Codeblöcke — und schreibe dabei immer den **Dateinamen** als Bezeichner (z.B. \`\`\`index.html, \`\`\`Main.java, \`\`\`README.md) — NICHT die Sprache (\`\`\`html, \`\`\`java, \`\`\`markdown)
 - Beginne NIEMALS mit "Verstanden", "Ich baue jetzt", "Natürlich" oder ähnlichen Einleitungen — starte direkt mit der Antwort oder (wenn Dateien vorhanden) mit "Schaue mir die Dateien an."${learnExtra}`;
 
   const contextPaths = openTabs.length > 0
@@ -1135,7 +1138,11 @@ Regeln:
       totalChars += content.length;
     });
     if (activeTab) p += `\n### AKTUELL SICHTBARE DATEI ###\n${activeTab}\n`;
-    p += `\nWICHTIG – Änderungen am Code:
+    p += `\nWICHTIG – Dateien ausgeben:
+REGEL: Jeder Codeblock MUSS den Dateinamen als Bezeichner haben — z.B. \`\`\`Main.java, \`\`\`README.md, \`\`\`style.css. NIE nur die Sprache (\`\`\`java, \`\`\`markdown, \`\`\`css).
+So werden Dateien automatisch im richtigen Ort im Dateibaum angelegt oder aktualisiert.
+
+Für ÄNDERUNGEN an bestehenden Dateien:
 1. Lies zuerst den vorhandenen Code und finde die betroffene Stelle(n).
 2. Gib NUR die geänderte Stelle als SEARCH/REPLACE-Block aus:
 <<<<<<< SEARCH
@@ -1144,8 +1151,11 @@ exakter alter Code (mind. 2–3 Zeilen Kontext drumherum)
 neuer Code
 >>>>>>> REPLACE
 3. Mehrere SEARCH/REPLACE-Blöcke sind erlaubt wenn mehrere Stellen geändert werden.
-4. Schreibe die GESAMTE Datei in einem einzigen Codeblock NUR wenn: (a) mehr als die Hälfte geändert wird, (b) eine neue Datei erstellt wird, oder (c) der Schüler explizit einen Komplett-Rewrite verlangt.
-VERBOTEN: Niemals nur einen Teil der Datei als Codeblock ausgeben — das löscht den Rest. Wenn unklar wie viel sich ändert: SEARCH/REPLACE verwenden.
+4. Schreibe die GESAMTE Datei NUR wenn: (a) mehr als die Hälfte geändert wird, (b) es eine neue Datei ist, oder (c) explizit ein Komplett-Rewrite gewünscht ist.
+5. Neue Dateien: Einfach als \`\`\`dateiname.ext Codeblock ausgeben — wird automatisch angelegt.
+6. Mehrere Dateien gleichzeitig: Mehrere Codeblöcke mit je eigenem Dateinamen ausgeben — alle werden automatisch angelegt.
+WICHTIG bei neuen Projekten mit mehreren Dateien: Wenn die aktuelle Datei "Unbenannt" oder leer ist, ignoriere sie — erstelle einfach die neuen Projektdateien mit den richtigen Namen (z.B. index.html, style.css, script.js). Benenne "Unbenannt" NICHT um.
+VERBOTEN: Niemals nur einen Teil ausgeben (löscht den Rest). Wenn unklar: SEARCH/REPLACE. Niemals denselben Inhalt in mehrere Dateien kopieren.
 Der SEARCH-Text muss exakt so im Original stehen (Leerzeichen und Einrückung beachten).`;
   }
 
@@ -1354,9 +1364,10 @@ document.getElementById('preview-btn').onclick = togglePreview;
 function extractStreamingCode(text) {
   // Don't live-update during streaming if it's a SEARCH/REPLACE response (full or partial)
   if (text.includes('<<<<<<<')) return null;
-  // Matches an open or closed code block — returns code content
-  const match = text.match(/```[\w]*\n([\s\S]*?)(?:```|$)/);
-  return match ? match[1] : null;
+  // Find the first code fence — if its identifier is a filename (has dot), stream into active tab
+  // (will be redirected to new file at stream end). If it's a language tag, stream normally.
+  const match = text.match(/```([\w./-]*)\n([\s\S]*?)(?:```|$)/);
+  return match ? match[2] : null;
 }
 
 function applySearchReplace(text, currentContent) {
@@ -1365,13 +1376,36 @@ function applySearchReplace(text, currentContent) {
   let applied = 0, added = 0, removed = 0;
   let match;
   while ((match = blockPattern.exec(text)) !== null) {
-    const search = match[1];
+    const search  = match[1];
     const replace = match[2];
     if (result.includes(search)) {
+      // Exact match
       result = result.replace(search, replace);
       removed += search.split('\n').length;
       added   += replace.split('\n').length;
       applied++;
+    } else {
+      // Fuzzy fallback: match line-by-line ignoring leading/trailing whitespace per line
+      const searchLines  = search.split('\n');
+      const resultLines  = result.split('\n');
+      const needle = searchLines.map(l => l.trim()).join('\n');
+      let found = -1, foundLen = 0;
+      for (let i = 0; i <= resultLines.length - searchLines.length; i++) {
+        const slice = resultLines.slice(i, i + searchLines.length).map(l => l.trim()).join('\n');
+        if (slice === needle) { found = i; foundLen = searchLines.length; break; }
+      }
+      if (found !== -1) {
+        // Preserve indentation of first matched line
+        const indent = (resultLines[found].match(/^(\s*)/) || ['',''])[1];
+        const replaceLines = replace.split('\n').map((l, idx) =>
+          idx === 0 ? indent + l.trimStart() : l
+        );
+        resultLines.splice(found, foundLen, ...replaceLines);
+        result = resultLines.join('\n');
+        removed += foundLen;
+        added   += replaceLines.length;
+        applied++;
+      }
     }
   }
   return applied > 0 ? { content: result, count: applied, added, removed } : null;
@@ -1415,9 +1449,29 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
 
   let srNotified = false;
   function scheduleMonacoUpdate() {
-    if (rafPending || !activeTab || !vfs[activeTab]?.model) return;
-    // Capture original content on very first call — before any streaming write can corrupt it
-    if (agent.srStreamBase === null) agent.srStreamBase = vfs[activeTab].model.getValue();
+    if (rafPending) return;
+
+    // On very first chunk: detect filename fence and redirect streaming to correct file
+    if (agent.srStreamBase === null) {
+      const fenceMatch = fullText.match(/^```([\w./-]+)\n/);
+      const fenceName = fenceMatch ? fenceMatch[1] : null;
+      const streamDir = activeTab && activeTab.includes('/') ? activeTab.replace(/\/[^/]+$/, '/') : '';
+      if (fenceName && fenceName.includes('.') && (!activeTab || fenceName !== activeTab.split('/').pop())) {
+        // New file — create it immediately and switch editor to it for live streaming
+        const targetPath = streamDir + fenceName;
+        agent.srStreamBase = ''; // new file starts empty
+        agent.streamCreatedFile = targetPath;
+        if (!vfs[targetPath]) addFile(targetPath, '');
+        openTab(targetPath);
+        renderTree();
+      } else if (activeTab && vfs[activeTab]?.model) {
+        agent.srStreamBase = vfs[activeTab].model.getValue();
+      } else {
+        return; // no target yet
+      }
+    }
+
+    if (!activeTab || !vfs[activeTab]?.model) return;
     rafPending = true;
     requestAnimationFrame(() => {
       rafPending = false;
@@ -1494,6 +1548,7 @@ async function sendMessage() {
   if (!text || agent.isTyping) return;
   agent.srStreamBase    = null;
   agent.srStreamApplied = false;
+  agent.streamCreatedFile = null;
 
   input.value = '';
   input.style.height = 'auto';
@@ -1666,14 +1721,29 @@ async function sendMessage() {
       const srBase = agent.srStreamBase !== null ? agent.srStreamBase
                    : (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
       const srResult = srBase ? applySearchReplace(data.text, srBase) : null;
-      const codeBlockMatch = !srResult ? [...data.text.matchAll(/```[\w]*\n([\s\S]*?)```/g)] : [];
-      const hasFullBlock = !srResult && codeBlockMatch.length === 1 && activeTab && vfs[activeTab];
-      const didAutoApply = !!(srResult || hasFullBlock);
+      // ── File blocks: collect all code blocks that have a filename as identifier ──
+      const allBlocks = !srResult ? [...data.text.matchAll(/```([\w./-]*)\n([\s\S]*?)```/g)] : [];
+      const dir = activeTab && activeTab.includes('/') ? activeTab.replace(/\/[^/]+$/, '/') : '';
+      // A block is a "file block" if its fence identifier contains a dot (= filename)
+      const fileBlocks = allBlocks.filter(m => m[1].includes('.'));
+      // A block targets the active tab if its fence matches the active file's name or language
+      const activeName = activeTab ? activeTab.split('/').pop() : '';
+      const activeLang = activeTab && vfs[activeTab] ? vfs[activeTab].language : '';
+      const activeTabBlock = allBlocks.length === 1 && !fileBlocks.length
+        ? allBlocks[0]   // single block with language tag → treat as active-file update
+        : null;
+      const didAutoApply = !!(srResult || fileBlocks.length || activeTabBlock);
 
       if (didAutoApply && !agent.learnMode) {
-        const fname = activeTab || 'Datei';
-        const action = srResult ? 'angepasst' : 'erstellt';
-        const doneMessages = [
+        const newFileNames = fileBlocks.map(m => m[1]);
+        const fname = newFileNames.length ? newFileNames.join(', ') : (activeTab || 'Datei');
+        const action = srResult ? 'angepasst' : newFileNames.length ? 'angelegt' : 'erstellt';
+        const doneMessages = newFileNames.length ? [
+          `${fname} angelegt.`,
+          `Fertig — ${fname} ist neu im Dateibaum.`,
+          `${fname} wurde erstellt — schau mal rein.`,
+          `Neue Datei${newFileNames.length > 1 ? 'en' : ''}: ${fname}.`,
+        ] : [
           `Erledigt. ${fname} wurde ${action}.`,
           `Fertig — ${fname} wurde ${action}.`,
           `Gemacht. ${fname} ist jetzt ${action}.`,
@@ -1709,15 +1779,56 @@ async function sendMessage() {
           vfs[activeTab].model.setValue(srResult.content);
         }
         sysMsgHtml(`✓ ${srResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${srResult.added}</span> <span style="color:#f44336">−${srResult.removed}</span>`);
-      } else if (hasFullBlock) {
-        const newCode = codeBlockMatch[0][1].replace(/\n$/, '');
-        const isEmpty = vfs[activeTab].content.trim() === '';
-        const oldLines = isEmpty ? 0 : (vfs[activeTab].content.match(/\n/g) || []).length + 1;
+      } else if (fileBlocks.length) {
+        // Restore active tab only if streaming wrote into it unintentionally (not a new file we created)
+        if (!agent.streamCreatedFile && agent.srStreamBase !== null && activeTab && vfs[activeTab]?.model) {
+          vfs[activeTab].content = agent.srStreamBase;
+          vfs[activeTab].model.setValue(agent.srStreamBase);
+        }
+        // Detect obviously wrong content for a given file extension
+        const contentMismatch = (filename, code) => {
+          const ext = filename.split('.').pop().toLowerCase();
+          const looksLikeHtml = /^\s*<!DOCTYPE|^\s*<html/i.test(code);
+          if (ext === 'css' && looksLikeHtml) return 'CSS-Datei enthält HTML';
+          if (ext === 'js' && looksLikeHtml) return 'JS-Datei enthält HTML';
+          if (ext === 'py' && looksLikeHtml) return 'Python-Datei enthält HTML';
+          if (ext === 'java' && looksLikeHtml) return 'Java-Datei enthält HTML';
+          return null;
+        };
+        let lastPath = null;
+        for (const blk of fileBlocks) {
+          const newCode = blk[2].replace(/\n$/, '');
+          const newLines = (newCode.match(/\n/g) || []).length + 1;
+          const newPath = dir + blk[1];
+          const mismatch = contentMismatch(blk[1], newCode);
+          if (mismatch) {
+            sysMsgHtml(`⚠ <b>${blk[1]}</b> übersprungen — Modell hat falschen Inhalt generiert (${mismatch}). Bitte nochmal versuchen oder anderes Modell wählen.`);
+            continue;
+          }
+          const isActiveFile = activeTab && blk[1] === activeTab.split('/').pop();
+          if (isActiveFile) {
+            if (vfs[activeTab]?.model) {
+              vfs[activeTab].content = newCode;
+              vfs[activeTab].model.setValue(newCode);
+            }
+            lastPath = activeTab;
+            sysMsgHtml(`✓ <b>${activeTab}</b> aktualisiert &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
+          } else {
+            addFile(newPath, newCode);
+            lastPath = newPath;
+            sysMsgHtml(`✓ <b>${newPath}</b> angelegt &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
+          }
+        }
+        if (lastPath) { openTab(lastPath); renderTree(); }
+      } else if (activeTabBlock) {
+        const newCode = activeTabBlock[2].replace(/\n$/, '');
         const newLines = (newCode.match(/\n/g) || []).length + 1;
+        const isEmpty = !activeTab || vfs[activeTab]?.content.trim() === '';
+        const oldLines = isEmpty ? 0 : (vfs[activeTab].content.match(/\n/g) || []).length + 1;
         // Guard: if new code is less than 50% of original, it's likely a partial — don't overwrite
         if (!isEmpty && newLines < oldLines * 0.5) {
           sysMsgHtml(`⚠ Modell hat nur einen Teil ausgegeben (${newLines} von ${oldLines} Zeilen) — Datei wurde <b>nicht</b> überschrieben. Bitte SEARCH/REPLACE verwenden oder Änderung manuell einfügen.`);
-        } else {
+        } else if (activeTab && vfs[activeTab]) {
           vfs[activeTab].content = newCode;
           vfs[activeTab].model.setValue(newCode);
           sysMsgHtml(`✓ ${activeTab} wurde aktualisiert &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
