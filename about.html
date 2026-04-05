@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About – LMG Code</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #1e1e1e;
+      --header-bg:   #1a2744;
+      --border:      #3e3e42;
+      --text:        #cccccc;
+      --text-dim:    #858585;
+      --accent:      #0078d4;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
+
+    #app { display: flex; flex-direction: column; height: 100dvh; }
+
+    /* ── Header ── */
+    #header {
+      height: 48px; background: var(--header-bg); display: flex; align-items: center;
+      padding: 0 16px; gap: 12px; flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    #header img { height: 46px; width: 46px; border-radius: 6px; object-fit: cover; }
+    #header-title { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.2px;
+      text-decoration: none; transition: color 0.15s; }
+    #header-title:hover { color: rgba(255,255,255,0.75); }
+    #header-byline { margin-left: auto; font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
+    #header-byline .sep { color: rgba(255,255,255,0.2); }
+    #header-current { font-size: 11px; color: var(--text-dim); }
+
+    /* ── Content ── */
+    #content {
+      flex: 1; overflow-y: auto; padding: 48px 24px;
+      max-width: 720px; width: 100%; margin: 0 auto;
+    }
+
+    #content h2 {
+      font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 24px;
+    }
+
+    /* scrollbar */
+    #content::-webkit-scrollbar { width: 8px; }
+    #content::-webkit-scrollbar-track { background: transparent; }
+    #content::-webkit-scrollbar-thumb { background: #424242; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header id="header">
+    <img src="Logo LMG Code.jpg" alt="LMG">
+    <a id="header-title" href="index.html">LMG Code</a>
+    <span id="header-byline">by Simon ❤️<span class="sep">|</span><a href="index.html" style="color:var(--text-dim);text-decoration:none;transition:color 0.15s;" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color=''">← Zurück</a></span>
+  </header>
+
+  <div id="content">
+    <h2>Über LMG Code / Wissenswertes</h2>
+
+    <p style="margin-bottom:24px;">Dieses Programm wird von Herr Fuhs entwickelt und dient dazu, Schülerinnen und Schüler vom Leibniz-Montessori-Gymnasium Düsseldorf beim Erlernen von Agentic Coding zu unterstützen.</p>
+
+    <h3 style="font-size:15px;font-weight:700;color:#fff;margin-bottom:12px;">Wichtige Kurzbefehle</h3>
+    <table style="border-collapse:collapse;margin-bottom:24px;width:100%;">
+      <tbody>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/help</td><td style="padding:3px 0;">Liste aller Kurzbefehle</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/model</td><td style="padding:3px 0;">Modell anzeigen / wechseln</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/learn</td><td style="padding:3px 0;">Lernmodus an/aus</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/enter</td><td style="padding:3px 0;">Enter-Taste drücken sendet direkt</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/clear</td><td style="padding:3px 0;">Chat leeren</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/agent</td><td style="padding:3px 0;">neuen Agenten spawnen</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/add</td><td style="padding:3px 0;">neue Datei anlegen</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/delete</td><td style="padding:3px 0;">aktuelle Datei löschen</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/open</td><td style="padding:3px 0;">Ordner öffnen</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/save</td><td style="padding:3px 0;">aktuelle Datei herunterladen</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/saveall</td><td style="padding:3px 0;">alle Dateien als ZIP</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-size:15px;font-weight:700;color:#fff;margin-bottom:8px;">Lernmodus</h3>
+    <p style="margin-bottom:24px;">Im Lernmodus gibt der Assistent fertigen Code aus, erklärt aber dabei Konzepte und gibt gezielte Hinweise — so wie ein guter Lehrer. Der Modus lässt sich mit <span style="color:#4fc1ff;font-family:monospace;">/learn</span> oder dem Schalter im Chat-Header ein- und ausschalten. Er ist pro Agent separat einstellbar.</p>
+
+    <h3 style="font-size:15px;font-weight:700;color:#fff;margin-bottom:8px;">Modellanbindung</h3>
+    <p style="margin-bottom:24px;">Die Infrastruktur für Modelle ändert sich häufig und wird häufiges Anpassen dieser Seite notwendig machen. Die Anbindungen laufen über die Freikontingente von Google AI Studio (<a href="https://aistudio.google.com/welcome" target="_blank" style="color:#0078d4;">Link</a>) und OpenRouter (<a href="https://openrouter.ai/collections/free-models" target="_blank" style="color:#0078d4;">Link</a>).</p>
+
+    <h3 style="font-size:15px;font-weight:700;color:#fff;margin-bottom:12px;">Unterstützte Sprachen</h3>
+    <table style="border-collapse:collapse;margin-bottom:24px;width:100%;">
+      <thead>
+        <tr>
+          <td style="padding:3px 16px 6px 0;color:#858585;font-size:11px;">Sprache</td>
+          <td style="padding:3px 16px 6px 0;color:#858585;font-size:11px;">Dateiendung</td>
+          <td style="padding:3px 0 6px 0;color:#858585;font-size:11px;">Execution</td>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding:3px 16px 3px 0;">Python</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.py</td><td style="padding:3px 0;">Pyodide (im Browser, kein Server)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">C</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.c</td><td style="padding:3px 0;">Wandbox (gcc)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">C++</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.cpp</td><td style="padding:3px 0;">Wandbox (gcc)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">C#</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.cs</td><td style="padding:3px 0;">Wandbox (Mono)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">TypeScript</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.ts</td><td style="padding:3px 0;">Wandbox</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">Ruby</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.rb</td><td style="padding:3px 0;">Wandbox</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">HTML/CSS/JS</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.html</td><td style="padding:3px 0;">Vorschau (im Browser, Live-Rendering)</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="font-size:15px;font-weight:700;color:#fff;margin-bottom:8px;">GitHub</h3>
+    <p style="margin-bottom:24px;">LMG Code ist Open Source. Das GitHub Repository findest du hier: <a href="https://github.com/simon23-12/lmgcode" target="_blank" style="color:#0078d4;">Link</a>.<br>Bug gefunden? Sende einen Pull Request: <a href="https://github.com/simon23-12/lmgcode/pulls" target="_blank" style="color:#0078d4;">Link</a></p>
+
+    <h3 style="font-size:15px;font-weight:700;color:#fff;margin-bottom:8px;">Datenschutz</h3>
+    <p style="margin-bottom:24px;">Eingaben werden an die jeweiligen Modell-Provider (Google/OpenRouter) gesendet, um die Antwort zu generieren. Bitte gebt keine privaten Daten oder Klarnamen in den Chat ein.</p>
+
+    <h3 style="font-size:15px;font-weight:700;color:#fff;margin-bottom:12px;">Tech Stack</h3>
+    <ul style="list-style:none;margin-bottom:24px;display:flex;flex-direction:column;gap:4px;">
+      <li><span style="color:#858585;">Frontend:</span> Vanilla HTML/CSS/JS, keine Frameworks, kein Build-Step</li>
+      <li><span style="color:#858585;">Editor:</span> Monaco Editor 0.47.0 via jsDelivr CDN (AMD-Loader)</li>
+      <li><span style="color:#858585;">ZIP-Entpacken:</span> fflate 0.8.2 via CDN</li>
+      <li><span style="color:#858585;">Markdown-Rendering:</span> marked.js 12.0.0 via CDN (nur Bot-Antworten)</li>
+      <li><span style="color:#858585;">Icons:</span> Font Awesome 6.5.0 via CDN</li>
+      <li><span style="color:#858585;">Backend:</span> Vercel Serverless Functions (Node.js, ESM)</li>
+      <li><span style="color:#858585;">Code-Execution:</span> Pyodide 0.27.0 (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby)</li>
+      <li><span style="color:#858585;">AI-Modelle:</span> Fünf Modelle, User wählt im Dropdown — Standard: Gemini 3.1 Flash Lite
+        <ul style="list-style:none;margin-top:4px;margin-left:16px;display:flex;flex-direction:column;gap:2px;">
+          <li><span style="color:#4fc1ff;font-family:monospace;">gemini-3.1-flash-lite-preview</span> — Gemini 3.1 Flash Lite (Standard) via Google AI Studio</li>
+          <li><span style="color:#4fc1ff;font-family:monospace;">qwen/qwen3.6-plus:free</span> — Qwen via OpenRouter</li>
+          <li><span style="color:#4fc1ff;font-family:monospace;">stepfun/step-3.5-flash:free</span> — Step 3.5 Flash via OpenRouter</li>
+          <li><span style="color:#4fc1ff;font-family:monospace;">nvidia/nemotron-3-super-120b-a12b:free</span> — Nemotron 3 Super via OpenRouter</li>
+          <li><span style="color:#4fc1ff;font-family:monospace;">gemma-4-31b-it</span> — Gemma 4 31B via Google AI Studio</li>
+        </ul>
+      </li>
+    </ul>
+
+    <p style="color:var(--text-dim);font-size:11px;">Version 1.0.426 (April 2026)</p>
+  </div>
+</div>
+</body>
+</html>
