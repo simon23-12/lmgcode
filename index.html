@@ -37,7 +37,10 @@
     }
     #header img { height: 46px; width: 46px; border-radius: 6px; object-fit: cover; }
     #header h1 { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.2px; }
-    #header-byline { margin-left: auto; font-size: 11px; color: var(--text-dim); }
+    #header-byline { margin-left: auto; font-size: 11px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; }
+    #header-byline .sep { color: rgba(255,255,255,0.2); }
+    #header-about { font-size: 11px; color: var(--text-dim); text-decoration: none; transition: color 0.15s; }
+    #header-about:hover { color: #fff; }
 
     /* ── Workspace ── */
     #workspace { display: flex; flex: 1; overflow: hidden; }
@@ -92,6 +95,8 @@
     .tree-file.active { background: rgba(0,120,212,0.18); color: #fff; }
     .tree-file i { font-size: 11px; flex-shrink: 0; color: var(--text-dim); }
     .tree-file .fname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #file-tree.drag-over { outline: 2px dashed var(--accent); outline-offset: -4px;
+      background: rgba(0,120,212,0.07); }
 
     /* ── Editor Column ── */
     #editor-column { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
@@ -119,16 +124,26 @@
     #editor-area { flex: 1; position: relative; overflow: hidden; }
     #monaco-container { position: absolute; inset: 0; }
     #preview-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: #fff; display: none; }
+    #run-output {
+      position: absolute; inset: 0; overflow-y: auto; display: none;
+      background: #0d0d0d; color: #e0e0e0; font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 13px; padding: 14px 16px; box-sizing: border-box; white-space: pre-wrap; word-break: break-word;
+    }
+    #run-output .ro-stdout { color: #e0e0e0; }
+    #run-output .ro-stderr { color: #f87171; }
+    #run-output .ro-info   { color: #6b7280; font-style: italic; }
+    #run-output .ro-exit0  { color: #4ade80; }
+    #run-output .ro-exit1  { color: #f87171; }
 
-    #preview-btn {
+    #preview-btn, #run-btn {
       margin-left: auto; margin-right: 6px; align-self: center; flex-shrink: 0;
       background: none; border: 1px solid var(--border); color: var(--text-dim);
       font-size: 11px; font-family: inherit; border-radius: 4px; padding: 2px 8px;
       cursor: pointer; display: flex; align-items: center; gap: 5px; white-space: nowrap;
       transition: border-color 0.15s, color 0.15s;
     }
-    #preview-btn:hover { border-color: var(--accent); color: var(--text); }
-    #preview-btn.active { border-color: var(--accent); color: var(--accent); }
+    #preview-btn:hover, #run-btn:hover { border-color: var(--accent); color: var(--text); }
+    #preview-btn.active, #run-btn.active { border-color: var(--accent); color: var(--accent); }
 
     #editor-placeholder {
       position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
@@ -290,7 +305,7 @@
   <header id="header">
     <img src="Logo LMG Code.jpg" alt="LMG">
     <h1>LMG Code</h1>
-    <span id="header-byline">by Simon ❤️</span>
+    <span id="header-byline">by Simon ❤️<span class="sep">|</span><a id="header-about" href="about.html">about</a></span>
   </header>
 
   <div id="workspace">
@@ -326,10 +341,12 @@
     <div id="editor-column">
       <div id="tabs-bar">
         <button id="preview-btn" title="Vorschau umschalten"><i class="fa-solid fa-play"></i> Vorschau</button>
+        <button id="run-btn" title="Code ausführen" style="display:none"><i class="fa-solid fa-play"></i> Run</button>
       </div>
       <div id="editor-area">
         <div id="monaco-container"></div>
         <iframe id="preview-frame" sandbox="allow-scripts allow-forms allow-modals"></iframe>
+        <div id="run-output"></div>
         <div id="editor-placeholder">
           <i class="fa-solid fa-code"></i>
           <p>Datei aus dem Baum öffnen</p>
@@ -346,10 +363,11 @@
         <div id="chat-header-title">
           <i class="fa-solid fa-robot"></i>
           <select id="model-select" title="Modell wählen">
-            <option value="qwen" selected>Qwen 3.6 Plus</option>
+            <option value="qwen">Qwen 3.6 Plus</option>
             <option value="step">Step 3.5 Flash</option>
             <option value="nemotron">Nemotron 3 Super</option>
             <option value="gemma">Gemma 4 31B</option>
+            <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -428,7 +446,7 @@ function createAgent() {
     isTyping: false,
     cancelStream: null,
     sessionTokens: 0,
-    model: 'qwen',
+    model: 'geminiflashlite',
     srStreamBase: null,
     srStreamApplied: false,
     streamCreatedFile: null,
@@ -582,10 +600,12 @@ function clearVFS() {
   activeTab = null;
   if (editor) editor.setModel(null);
   document.getElementById('editor-placeholder').style.display = 'flex';
-  const bar = document.getElementById('tabs-bar');
-  const btn = document.getElementById('preview-btn');
+  const bar        = document.getElementById('tabs-bar');
+  const previewBtn = document.getElementById('preview-btn');
+  const runBtn     = document.getElementById('run-btn');
   bar.innerHTML = '';
-  bar.appendChild(btn);
+  bar.appendChild(previewBtn);
+  bar.appendChild(runBtn);
 }
 
 // ── 3. File Tree ──────────────────────────────────────────────────────────────
@@ -647,8 +667,9 @@ document.getElementById('file-tree').addEventListener('click', e => {
 
 // ── 4. Tabs ───────────────────────────────────────────────────────────────────
 function renderTabs() {
-  const bar = document.getElementById('tabs-bar');
-  const btn = document.getElementById('preview-btn');
+  const bar        = document.getElementById('tabs-bar');
+  const previewBtn = document.getElementById('preview-btn');
+  const runBtn     = document.getElementById('run-btn');
 
   bar.innerHTML = openTabs.map(p => {
     const name   = p.split('/').pop();
@@ -660,10 +681,13 @@ function renderTabs() {
     </div>`;
   }).join('');
 
-  bar.appendChild(btn);
+  bar.appendChild(previewBtn);
+  bar.appendChild(runBtn);
 
   const activeEl = bar.querySelector('.tab.active');
   if (activeEl) activeEl.scrollIntoView({ inline: 'nearest' });
+
+  updateActionButton();
 }
 
 document.getElementById('tabs-bar').addEventListener('click', e => {
@@ -876,6 +900,65 @@ document.getElementById('folder-input').addEventListener('change', async functio
   sysMsg(`Projekt geladen: ${Object.keys(vfs).length} Dateien`);
   e.target.value = '';
 });
+
+// Drag & Drop Ordner in den Dateibaum
+(function() {
+  const treeEl = document.getElementById('file-tree');
+
+  async function readDropEntry(entry, prefix) {
+    const name = entry.name;
+    if (name.startsWith('.') || name === '__MACOSX') return;
+    if (entry.isDirectory) {
+      if (name === 'node_modules') return;
+      await new Promise(resolve => {
+        const reader = entry.createReader();
+        const readBatch = () => {
+          reader.readEntries(async entries => {
+            if (!entries.length) { resolve(); return; }
+            for (const e of entries) await readDropEntry(e, prefix + name + '/');
+            readBatch();
+          });
+        };
+        readBatch();
+      });
+    } else {
+      if (name === '.DS_Store') return;
+      if (isText(name)) {
+        try {
+          const file = await new Promise((res, rej) => entry.file(res, rej));
+          const content = await file.text();
+          addFile(prefix + name, content);
+        } catch {}
+      } else {
+        const path = (prefix + name).replace(/\\/g,'/').replace(/^\/+/,'');
+        if (path) vfs[path] = { content: '', language: 'plaintext', model: null, binary: true };
+      }
+    }
+  }
+
+  treeEl.addEventListener('dragover', e => {
+    e.preventDefault();
+    treeEl.classList.add('drag-over');
+  });
+  treeEl.addEventListener('dragleave', e => {
+    if (!treeEl.contains(e.relatedTarget)) treeEl.classList.remove('drag-over');
+  });
+  treeEl.addEventListener('drop', async e => {
+    e.preventDefault();
+    treeEl.classList.remove('drag-over');
+    const items = Array.from(e.dataTransfer.items || []);
+    if (!items.length) return;
+    clearVFS();
+    dirHandle = null;
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      if (!entry) continue;
+      await readDropEntry(entry, entry.isDirectory ? entry.name + '/' : '');
+    }
+    renderTree();
+    sysMsg(`Projekt geladen: ${Object.keys(vfs).length} Dateien`);
+  });
+})();
 
 // Speichern
 document.getElementById('btn-save').onclick = async () => {
@@ -1254,6 +1337,142 @@ function sysMsg(text) {
   scrollMsgs();
 }
 
+// ── Slash Commands ─────────────────────────────────────────────────────────
+const SLASH_MODEL_NAMES = {
+  qwen:           'Qwen 3.6 Plus',
+  step:           'Step 3.5 Flash',
+  nemotron:       'Nemotron 3 Super',
+  gemma:          'Gemma 4 31B',
+  geminiflashlite:'Gemini 3.1 Flash Lite',
+};
+
+function handleSlashCommand(text, agent) {
+  const cmd = text.slice(1).trim().toLowerCase().split(/\s+/)[0];
+
+  if (cmd === 'learn') {
+    agent.learnMode = !agent.learnMode;
+    document.getElementById('learn-toggle').classList.toggle('active', agent.learnMode);
+    sysMsg(agent.learnMode
+      ? 'Lernmodus aktiviert — Änderungen werden erklärt.'
+      : 'Lernmodus deaktiviert — kompakte Antworten.');
+    return true;
+  }
+
+  if (cmd === 'model') {
+    const currentName = SLASH_MODEL_NAMES[agent.model] || agent.model;
+    sysMsgHtml(
+      `Aktuelles Modell: <b>${currentName}</b><br>` +
+      `<span style="opacity:.65;font-size:11px">` +
+      `1&nbsp;Qwen&nbsp;&nbsp;2&nbsp;Step&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;Lite` +
+      `&nbsp;&nbsp;<kbd style="opacity:.5">Esc</kbd>&nbsp;=&nbsp;abbrechen</span>`
+    );
+    const KEYS = { '1':'qwen', '2':'step', '3':'nemotron', '4':'gemma', '5':'geminiflashlite' };
+    const handler = (e) => {
+      if (KEYS[e.key]) {
+        e.preventDefault();
+        document.removeEventListener('keydown', handler);
+        const m = KEYS[e.key];
+        agent.model = m;
+        document.getElementById('model-select').value = m;
+        sysMsg(`Modell: ${SLASH_MODEL_NAMES[m]}`);
+      } else if (e.key === 'Escape') {
+        document.removeEventListener('keydown', handler);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return true;
+  }
+
+  if (cmd === 'enter') {
+    // Toggle: Enter sends vs. Enter = newline (Ctrl+Enter sends)
+    const ENTER_KEY = 'slashEnterSends';
+    const nowSends = localStorage.getItem(ENTER_KEY) === 'true'; // default false
+    const next = !nowSends;
+    localStorage.setItem(ENTER_KEY, next);
+    sysMsg(next ? 'Enter sendet Prompt.' : 'Enter = neue Zeile. Ctrl+Enter sendet.');
+    applyEnterMode(next);
+    return true;
+  }
+
+  if (cmd === 'clear') {
+    agent.chatHistory = [];
+    agent.messagesEl.innerHTML = '<div class="chat-msg system">Chat geleert.</div>';
+    return true;
+  }
+
+  if (cmd === 'agent') {
+    addAgent();
+    return true;
+  }
+
+  if (cmd === 'add') {
+    document.getElementById('btn-new').click();
+    return true;
+  }
+
+  if (cmd === 'delete') {
+    document.getElementById('btn-delete').click();
+    return true;
+  }
+
+  if (cmd === 'open') {
+    document.getElementById('btn-folder').click();
+    return true;
+  }
+
+  if (cmd === 'save') {
+    // Download current file only (no dirHandle shortcut)
+    if (!activeTab || !vfs[activeTab]) { sysMsg('Keine Datei geöffnet.'); return true; }
+    const content = vfs[activeTab].model ? vfs[activeTab].model.getValue() : vfs[activeTab].content;
+    const name    = activeTab.split('/').pop();
+    const blob    = new Blob([content], { type: 'text/plain' });
+    const url     = URL.createObjectURL(blob);
+    const a       = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+    sysMsg(`${name} heruntergeladen.`);
+    return true;
+  }
+
+  if (cmd === 'saveall') {
+    const files = Object.keys(vfs);
+    if (!files.length) { sysMsg('Keine Dateien vorhanden.'); return true; }
+    const enc = new TextEncoder();
+    const zipInput = {};
+    for (const [path, file] of Object.entries(vfs)) {
+      zipInput[path] = enc.encode(file.model ? file.model.getValue() : file.content);
+    }
+    const zipped = fflate.zipSync(zipInput);
+    const blob   = new Blob([zipped], { type: 'application/zip' });
+    const url    = URL.createObjectURL(blob);
+    const a      = document.createElement('a');
+    a.href = url; a.download = 'projekt.zip'; a.click();
+    URL.revokeObjectURL(url);
+    sysMsg(`${files.length} Datei(en) als projekt.zip heruntergeladen.`);
+    return true;
+  }
+
+  if (cmd === 'help') {
+    sysMsgHtml(
+      `<b>Slash-Befehle:</b><br>` +
+      `<span style="font-size:11px;line-height:1.7">` +
+      `<b>/model</b> — Modell anzeigen / wechseln<br>` +
+      `<b>/learn</b> — Lernmodus an/aus<br>` +
+      `<b>/enter</b> — Enter-Taste: senden ↔ neue Zeile<br>` +
+      `<b>/clear</b> — Chat leeren<br>` +
+      `<b>/agent</b> — neuen Agenten spawnen<br>` +
+      `<b>/add</b> — neue Datei anlegen<br>` +
+      `<b>/delete</b> — aktuelle Datei löschen<br>` +
+      `<b>/open</b> — Ordner öffnen<br>` +
+      `<b>/save</b> — aktuelle Datei herunterladen<br>` +
+      `<b>/saveall</b> — alle Dateien als ZIP</span>`
+    );
+    return true;
+  }
+
+  return false;
+}
+
 document.getElementById('learn-toggle').onclick = () => {
   const agent = agents.get(activeAgentId);
   agent.learnMode = !agent.learnMode;
@@ -1295,7 +1514,7 @@ function updateChatStats(completionTokens, durationMs) {
 let previewActive = false;
 
 function buildPreviewHtml() {
-  // Find an HTML entry point: active tab first, then any .html file
+  // Find HTML entry point: active tab first, then any .html file
   const htmlFile = (activeTab && activeTab.match(/\.html?$/i))
     ? activeTab
     : Object.keys(vfs).find(p => p.match(/\.html?$/i));
@@ -1303,27 +1522,34 @@ function buildPreviewHtml() {
 
   let html = vfs[htmlFile].content;
 
-  // Inject all CSS files as <style> blocks (replacing <link> tags pointing to vfs files)
-  Object.entries(vfs).forEach(([path, file]) => {
-    if (!path.match(/\.css$/i)) return;
-    const filename = path.split('/').pop();
-    // Replace <link rel="stylesheet" href="filename.css"> with inline <style>
-    const linkRe = new RegExp(`<link[^>]+href=["']${filename}["'][^>]*>`, 'gi');
-    if (linkRe.test(html)) {
-      html = html.replace(linkRe, `<style>${file.content}<\/style>`);
-    } else {
-      html = html.replace('<\/head>', `<style>${file.content}<\/style><\/head>`);
-    }
+  // Resolve a relative href against the HTML file's directory
+  const baseDir = htmlFile.includes('/') ? htmlFile.slice(0, htmlFile.lastIndexOf('/') + 1) : '';
+  function resolvePath(href) {
+    if (!href || /^(https?:|\/\/|data:|blob:)/i.test(href)) return null; // external — leave as-is
+    const parts = (baseDir + href.replace(/^\.\//, '')).split('/');
+    const normalized = [];
+    for (const p of parts) { if (p === '..') normalized.pop(); else if (p && p !== '.') normalized.push(p); }
+    return normalized.join('/');
+  }
+
+  // Replace <link rel="stylesheet" href="..."> with inline <style> if file is in VFS
+  html = html.replace(/<link([^>]+)>/gi, (match, attrs) => {
+    if (!/rel=["']stylesheet["']/i.test(attrs)) return match;
+    const m = attrs.match(/href=["']([^"']+)["']/i);
+    if (!m) return match;
+    const resolved = resolvePath(m[1]);
+    if (!resolved || !vfs[resolved]) return match;
+    return `<style>${vfs[resolved].content}<\/style>`;
   });
 
-  // Inject all JS files as <script> blocks (replacing <script src="filename.js">)
-  Object.entries(vfs).forEach(([path, file]) => {
-    if (!path.match(/\.js$/i)) return;
-    const filename = path.split('/').pop();
-    const scriptRe = new RegExp(`<script[^>]+src=["']${filename}["'][^>]*><\/script>`, 'gi');
-    if (scriptRe.test(html)) {
-      html = html.replace(scriptRe, `<script>${file.content}<\/script>`);
-    }
+  // Replace <script src="..."><\/script> with inline <script> if file is in VFS
+  html = html.replace(/<script([^>]*)>\s*<\/script>/gi, (match, attrs) => {
+    const m = attrs.match(/src=["']([^"']+)["']/i);
+    if (!m) return match;
+    const resolved = resolvePath(m[1]);
+    if (!resolved || !vfs[resolved]) return match;
+    const otherAttrs = attrs.replace(/\s*src=["'][^"']+["']/, '').trim();
+    return `<script${otherAttrs ? ' ' + otherAttrs : ''}>${vfs[resolved].content}<\/script>`;
   });
 
   return html;
@@ -1336,6 +1562,7 @@ function togglePreview() {
   previewActive = !previewActive;
 
   if (previewActive) {
+    if (runOutputActive) toggleRunOutput(); // close run panel if open
     const html = buildPreviewHtml();
     if (!html) {
       previewActive = false;
@@ -1359,6 +1586,145 @@ function togglePreview() {
 
 document.getElementById('preview-btn').onclick = togglePreview;
 
+// ── 7b. Run (Piston API) ──────────────────────────────────────────────────────
+
+const PISTON_LANGS = {
+  py:   { language: 'python',     version: '*' },
+  c:    { language: 'c',          version: '*' },
+  cpp:  { language: 'c++',        version: '*' },
+  cs:   { language: 'csharp',     version: '*' },
+  ts:   { language: 'typescript', version: '*' },
+  rb:   { language: 'ruby',       version: '*' },
+};
+
+function getRunLang(path) {
+  const ext = (path || '').split('.').pop().toLowerCase();
+  return PISTON_LANGS[ext] || null;
+}
+
+function updateActionButton() {
+  const previewBtn = document.getElementById('preview-btn');
+  const runBtn     = document.getElementById('run-btn');
+  const isHtml     = activeTab && /\.html?$/i.test(activeTab);
+  const runLang    = activeTab ? getRunLang(activeTab) : null;
+  // Run-Button ersetzt Vorschau für ausführbare Dateien, sonst ist Vorschau der Default
+  runBtn.style.display     = runLang  ? '' : 'none';
+  previewBtn.style.display = runLang  ? 'none' : '';
+  // Close panels when switching to a file that doesn't support them
+  if (!isHtml && previewActive) togglePreview();
+  if (!runLang && runOutputActive) toggleRunOutput();
+}
+
+let runOutputActive = false;
+
+function toggleRunOutput() {
+  const out   = document.getElementById('run-output');
+  const btn   = document.getElementById('run-btn');
+  const monaco = document.getElementById('monaco-container');
+  runOutputActive = !runOutputActive;
+  if (runOutputActive) {
+    out.style.display = 'block';
+    monaco.style.display = 'none';
+    btn.classList.add('active');
+    btn.innerHTML = '<i class="fa-solid fa-code"></i> Editor';
+    runCode();
+  } else {
+    out.style.display = 'none';
+    monaco.style.display = 'block';
+    btn.classList.remove('active');
+    btn.innerHTML = '<i class="fa-solid fa-play"></i> Run';
+    if (editor) editor.layout();
+  }
+}
+
+// ── Pyodide (Python im Browser) ───────────────────────────────────────────────
+let _pyodide = null;
+let _pyodidePromise = null;
+
+async function getPyodide(out) {
+  if (_pyodide) return _pyodide;
+  if (!_pyodidePromise) {
+    _pyodidePromise = (async () => {
+      out.innerHTML = `<span class="ro-info">Python-Umgebung wird geladen (~10 MB, einmalig)…</span>\n`;
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+      const py = await loadPyodide();
+      // Override input() → browser prompt
+      py.runPython("import builtins; builtins.input = lambda p='': __import__('js').prompt(p) or ''");
+      _pyodide = py;
+      return py;
+    })();
+  }
+  return _pyodidePromise;
+}
+
+async function runPython(code, out) {
+  let pyodide;
+  try {
+    pyodide = await getPyodide(out);
+  } catch (e) {
+    out.innerHTML += `<span class="ro-stderr">Pyodide konnte nicht geladen werden: ${esc(String(e))}</span>`;
+    return;
+  }
+  out.innerHTML = `<span class="ro-info">Ausführen (python)…</span>\n`;
+
+  let stdout = '', stderr = '';
+  pyodide.setStdout({ batched: s => { stdout += s; } });
+  pyodide.setStderr({ batched: s => { stderr += s; } });
+
+  let exitCode = 0;
+  try {
+    await pyodide.runPythonAsync(code);
+  } catch (e) {
+    stderr += e.message;
+    exitCode = 1;
+  }
+
+  if (stdout) out.innerHTML += `<span class="ro-stdout">${esc(stdout)}</span>`;
+  if (stderr) out.innerHTML += `<span class="ro-stderr">${esc(stderr)}</span>`;
+  out.innerHTML += `\n<span class="${exitCode === 0 ? 'ro-exit0' : 'ro-exit1'}">─── Exit ${exitCode} ───</span>`;
+}
+
+async function runCode() {
+  const out  = document.getElementById('run-output');
+  const lang = getRunLang(activeTab);
+  if (!lang || !activeTab || !vfs[activeTab]) return;
+
+  const code = vfs[activeTab].model ? vfs[activeTab].model.getValue() : vfs[activeTab].content;
+  const filename = activeTab.split('/').pop();
+
+  // Python → Pyodide (im Browser, kein API-Call)
+  if (lang.language === 'python') { await runPython(code, out); return; }
+
+  // Alle anderen → Wandbox via /api/run
+  out.innerHTML = `<span class="ro-info">Ausführen (${lang.language})…</span>\n`;
+  let res, data;
+  try {
+    res = await fetch('/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: lang.language, files: [{ name: filename, content: code }] }),
+    });
+    data = await res.json();
+  } catch (e) {
+    out.innerHTML += `<span class="ro-stderr">Netzwerkfehler: ${esc(String(e))}</span>`;
+    return;
+  }
+
+  if (data.message) { out.innerHTML += `<span class="ro-stderr">${esc(data.message)}</span>`; return; }
+
+  const run = data.run;
+  if (run.stdout) out.innerHTML += `<span class="ro-stdout">${esc(run.stdout)}</span>`;
+  if (run.stderr) out.innerHTML += `<span class="ro-stderr">${esc(run.stderr)}</span>`;
+  out.innerHTML += `\n<span class="${run.code === 0 ? 'ro-exit0' : 'ro-exit1'}">─── Exit ${run.code} ───</span>`;
+}
+
+document.getElementById('run-btn').onclick = toggleRunOutput;
+
 // ── 9b. Streaming helpers ─────────────────────────────────────────────────────
 
 function extractStreamingCode(text) {
@@ -1378,20 +1744,27 @@ function applySearchReplace(text, currentContent) {
   while ((match = blockPattern.exec(text)) !== null) {
     const search  = match[1];
     const replace = match[2];
-    if (result.includes(search)) {
-      // Exact match
-      result = result.replace(search, replace);
+    const normSearch = search.normalize('NFC');
+    // Normalize result to NFC for comparison if needed
+    const resultNFC = result.normalize('NFC');
+    const useNFC = !result.includes(search) && resultNFC.includes(normSearch);
+    const effectiveResult = useNFC ? resultNFC : result;
+    const effectiveSearch = useNFC ? normSearch : search;
+    if (effectiveResult.includes(effectiveSearch)) {
+      // Exact match (with optional Unicode normalization)
+      result = effectiveResult.replace(effectiveSearch, replace);
       removed += search.split('\n').length;
       added   += replace.split('\n').length;
       applied++;
     } else {
-      // Fuzzy fallback: match line-by-line ignoring leading/trailing whitespace per line
+      // Fuzzy fallback: match line-by-line ignoring leading/trailing whitespace + Unicode normalization
+      const nfc = s => s.normalize('NFC');
       const searchLines  = search.split('\n');
       const resultLines  = result.split('\n');
-      const needle = searchLines.map(l => l.trim()).join('\n');
+      const needle = searchLines.map(l => nfc(l.trim())).join('\n');
       let found = -1, foundLen = 0;
       for (let i = 0; i <= resultLines.length - searchLines.length; i++) {
-        const slice = resultLines.slice(i, i + searchLines.length).map(l => l.trim()).join('\n');
+        const slice = resultLines.slice(i, i + searchLines.length).map(l => nfc(l.trim())).join('\n');
         if (slice === needle) { found = i; foundLen = searchLines.length; break; }
       }
       if (found !== -1) {
@@ -1535,10 +1908,11 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
 }
 
 const FALLBACK_CHAINS = {
-  qwen:     ['qwen', 'step', 'nemotron', 'gemma'],
-  step:     ['step', 'nemotron', 'qwen', 'gemma'],
-  nemotron: ['nemotron', 'step', 'qwen', 'gemma'],
-  gemma:    ['gemma', 'qwen', 'step', 'nemotron'],
+  qwen:             ['qwen', 'step', 'nemotron', 'gemma'],
+  step:             ['step', 'nemotron', 'qwen', 'gemma'],
+  nemotron:         ['nemotron', 'step', 'qwen', 'gemma'],
+  gemma:            ['gemma', 'geminiflashlite', 'qwen', 'step', 'nemotron'],
+  geminiflashlite:  ['geminiflashlite', 'gemma', 'qwen', 'step', 'nemotron'],
 };
 
 async function sendMessage() {
@@ -1552,6 +1926,10 @@ async function sendMessage() {
 
   input.value = '';
   input.style.height = 'auto';
+
+  if (text.startsWith('/')) {
+    if (handleSlashCommand(text, agent)) return;
+  }
 
   const msgs = agent.messagesEl;
   const msgsScroll = document.getElementById('chat-messages');
@@ -1634,7 +2012,7 @@ async function sendMessage() {
   try {
   const selectedModel = document.getElementById('model-select').value;
   agent.model = selectedModel;
-  const chain = FALLBACK_CHAINS[selectedModel] ?? FALLBACK_CHAINS.qwen;
+  const chain = FALLBACK_CHAINS[selectedModel] ?? FALLBACK_CHAINS.geminiflashlite;
   const builtPrompt = buildPrompt(text, agent);
   let data = null, networkError = false, errorHandled = false, durationMs = 0;
 
@@ -1869,8 +2247,15 @@ document.getElementById('send-btn').onclick = function() {
 const chatInput = document.getElementById('chat-input');
 let chatInputManualHeight = null;
 
+function applyEnterMode(sends) {
+  chatInput._enterSends = sends;
+}
+// Restore on load (default: Ctrl+Enter sends — Enter = new line)
+applyEnterMode(localStorage.getItem('slashEnterSends') === 'true');
+
 chatInput.addEventListener('keydown', function(e) {
   if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(); return; }
+  if (e.key === 'Enter' && !e.shiftKey && chatInput._enterSends) { e.preventDefault(); sendMessage(); return; }
   if (chatInputManualHeight === null) {
     setTimeout(() => {
       this.style.height = 'auto';
