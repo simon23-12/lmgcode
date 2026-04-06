@@ -11,10 +11,15 @@ const MODEL_MAP = {
   nemotron:         'nvidia/nemotron-3-super-120b-a12b:free',
   gemma:            'gemma',
   geminiflashlite:  'geminiflashlite',
+  llama:            'llama-3.3-70b-versatile',
 };
 
 function isGoogleModel(target) {
   return target === 'gemma' || target === 'geminiflashlite';
+}
+
+function isGroqModel(target) {
+  return target === 'llama-3.3-70b-versatile';
 }
 
 export default async function handler(req, res) {
@@ -41,6 +46,8 @@ export default async function handler(req, res) {
     try {
       if (isGoogleModel(target)) {
         await streamGoogleAI(prompt, GOOGLE_MODELS[target], res);
+      } else if (isGroqModel(target)) {
+        await streamGroq(prompt, target, res);
       } else {
         await streamOpenRouter(prompt, target, res);
       }
@@ -55,6 +62,8 @@ export default async function handler(req, res) {
   try {
     const result = isGoogleModel(target)
       ? await tryGoogleAI(prompt, GOOGLE_MODELS[target])
+      : isGroqModel(target)
+      ? await tryGroq(prompt, target)
       : await tryOpenRouter(prompt, target);
     return res.status(200).json(result);
   } catch (err) {
@@ -179,6 +188,92 @@ async function tryOpenRouter(prompt, orModel) {
     promptTokens: usage.prompt_tokens ?? null,
     completionTokens: usage.completion_tokens ?? null,
   };
+}
+
+async function tryGroq(prompt, groqModel) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 57000);
+
+  let r, data;
+  try {
+    r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: groqModel,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    data = await r.json();
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') throw new Error(`${groqModel} Timeout.`);
+    throw err;
+  }
+
+  if (!r.ok) {
+    const msg = data?.error?.message || 'Fehler beim Generieren.';
+    const retryable = r.status === 429 || r.status === 503;
+    const err = new Error(msg);
+    if (!retryable) err.fatal = true;
+    throw err;
+  }
+
+  const usage = data.usage ?? {};
+  return {
+    text: data.choices[0].message.content,
+    promptTokens: usage.prompt_tokens ?? null,
+    completionTokens: usage.completion_tokens ?? null,
+  };
+}
+
+async function streamGroq(prompt, groqModel, res) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 57000);
+
+  let r;
+  try {
+    r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: groqModel,
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') throw new Error(`${groqModel} Timeout.`);
+    throw err;
+  }
+  clearTimeout(timer);
+
+  if (!r.ok) {
+    const data = await r.json();
+    const msg = data?.error?.message || 'Fehler beim Generieren.';
+    const retryable = r.status === 429 || r.status === 503;
+    const err = new Error(msg);
+    if (!retryable) err.fatal = true;
+    throw err;
+  }
+
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    res.write(decoder.decode(value, { stream: true }));
+  }
 }
 
 async function tryGoogleAI(prompt, googleModel) {
