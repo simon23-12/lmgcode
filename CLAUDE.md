@@ -1,7 +1,7 @@
 # LMG Code
 
 **Type:** HTML, JS, CSS  
-**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–13) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
+**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–10) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
 **URL:** https://lmgcode.vercel.app  
 **Vercel-Projekt:** simons-projects-56ea3d55/lmgcode
 
@@ -25,8 +25,9 @@ LMG Code/
 - **Markdown-Rendering:** marked.js 12.0.0 via CDN (nur Bot-Antworten)
 - **Icons:** Font Awesome 6.5.0 via CDN
 - **Backend:** Vercel Serverless Functions (Node.js, ESM)
-- **AI-Modelle:** Vier Modelle, User wählt im Dropdown — **Standard: Qwen**:
-  - **Qwen** (Standard): `qwen/qwen3.6-plus:free` via OpenRouter
+- **AI-Modelle:** Fünf Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
+  - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite-preview` via Google AI Studio
+  - **Qwen**: `qwen/qwen3.6-plus:free` via OpenRouter
   - **Step 3.5 Flash**: `stepfun/step-3.5-flash:free` via OpenRouter
   - **Nemotron 3 Super**: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
   - **Gemma 4 31B**: `gemma-4-31b-it` via Google AI Studio (`@google/generative-ai` SDK)
@@ -146,4 +147,11 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 
 Der Assistent **schreibt Code wenn gewünscht** — er ist kein Lehrer der nur Hinweise gibt. Er erklärt kurz was der Code macht, hält Erklärungen aber knapp. Antwortet in der Sprache des Schülers (DE/EN).
 
+## Deployment
 
+```bash
+cd "/Users/sim/Documents/LMG Code"
+vercel --prod --yes
+```
+
+Vercel setzt den API-Key automatisch (bereits konfiguriert unter Settings → Environment Variables).

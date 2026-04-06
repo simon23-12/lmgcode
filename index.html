@@ -210,6 +210,20 @@
     }
     #learn-toggle.active .toggle-dot { background: #22c55e; }
 
+    /* ── Think Mode Toggle ── */
+    #think-toggle {
+      display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none;
+      font-size: 10px; color: var(--text-dim); border: 1px solid var(--border);
+      border-radius: 12px; padding: 2px 8px 2px 5px; transition: border-color 0.15s, color 0.15s;
+    }
+    #think-toggle:hover { border-color: var(--accent); color: var(--text); }
+    #think-toggle.active { border-color: #f97316; color: #f97316; }
+    #think-toggle .toggle-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim);
+      flex-shrink: 0; transition: background 0.15s;
+    }
+    #think-toggle.active .toggle-dot { background: #f97316; }
+
     #chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex;
       flex-direction: column; gap: 8px; }
     #chat-messages::-webkit-scrollbar { width: 5px; }
@@ -269,6 +283,9 @@
       color: var(--text); padding: 8px 10px; font-size: 13px; font-family: inherit;
       resize: none; min-height: 38px; max-height: 400px; line-height: 1.4; outline: none;
       transition: border-color 0.15s;
+    }
+    #char-counter {
+      font-size: 10px; color: var(--text-dim); text-align: right; margin-top: 2px;
     }
     #chat-input:focus { border-color: var(--accent); }
     #chat-input::placeholder { color: var(--text-dim); }
@@ -388,10 +405,16 @@
       <div id="chat-input-area">
         <div id="chat-input-resize-handle"></div>
         <div id="chat-input-row">
-          <textarea id="chat-input" placeholder="Frage stellen…" rows="1"></textarea>
+          <textarea id="chat-input" placeholder="Frage stellen…" rows="1" maxlength="800"></textarea>
           <button id="send-btn"><i class="fa-solid fa-arrow-up"></i></button>
         </div>
+        <div style="display:flex;gap:6px;margin-top:5px;">
+          <div id="think-toggle" title="Thinking Mode: Erst planen, dann coden (2 Requests)">
+            <span class="toggle-dot"></span>Thinking
+          </div>
+        </div>
         <div id="chat-stats"></div>
+        <div id="char-counter">0/800</div>
         <div id="input-hint">Ctrl+Enter senden</div>
       </div>
     </div>
@@ -443,6 +466,7 @@ function createAgent() {
     id,
     chatHistory: [],
     learnMode: false,
+    thinkMode: false,
     isTyping: false,
     cancelStream: null,
     sessionTokens: 0,
@@ -491,6 +515,7 @@ function switchAgent(id) {
   document.getElementById('model-select').value = agent.model;
   const learnToggle = document.getElementById('learn-toggle');
   learnToggle.classList.toggle('active', agent.learnMode);
+  document.getElementById('think-toggle').classList.toggle('active', agent.thinkMode);
   document.getElementById('send-btn').disabled = agent.isTyping;
   const msgs = document.getElementById('chat-messages');
   msgs.scrollTop = msgs.scrollHeight;
@@ -522,6 +547,15 @@ function removeAgent(id) {
   activeAgentId = id;
   agents.get(id).messagesEl.classList.remove('hidden');
   renderAgentTabs();
+})();
+
+// Zeichenzähler für Chat-Input
+(function initCharCounter() {
+  const input = document.getElementById('chat-input');
+  const counter = document.getElementById('char-counter');
+  input.addEventListener('input', () => {
+    counter.textContent = `${input.value.length}/800`;
+  });
 })();
 
 const TEXT_EXT = new Set([
@@ -1188,7 +1222,7 @@ function finishRename(oldPath, newName) {
 
 
 // ── 8. Prompt Builder ─────────────────────────────────────────────────────────
-function buildPrompt(msg, agent) {
+function buildPrompt(msg, agent, plan) {
   const learnExtra = agent.learnMode
     ? `\n- LERNMODUS AKTIV: Erkläre jede Änderung ausführlich Schritt für Schritt — was wurde geändert, warum, und was bewirkt es. Der Schüler soll wirklich verstehen, was passiert.`
     : `\n- Führe Aufgaben direkt aus. Antworte kurz und präzise — keine langen Einleitungen, kein Wiederholen der Aufgabe.
@@ -1249,8 +1283,66 @@ Der SEARCH-Text muss exakt so im Original stehen (Leerzeichen und Einrückung be
     });
   }
 
+  if (plan) {
+    p += `\n### IMPLEMENTIERUNGSPLAN (bereits analysiert — direkt umsetzen) ###\n${plan}\n`;
+  }
+
   p += `\n### AKTUELLE FRAGE ###\nSchüler: "${msg}"\nHelper:`;
   return p;
+}
+
+// ── 8b. Planning Prompt + Fetch ───────────────────────────────────────────────
+function buildPlanningPrompt(msg, agent) {
+  let p = `Du bist ein Coding-Assistent. Analysiere die folgende Aufgabe und erstelle einen präzisen Implementierungsplan.
+
+WICHTIG: Schreibe KEINEN Code. Nur der Plan.
+Gib aus:
+1. Welche Dateien betroffen sind
+2. Welche konkreten Änderungen nötig sind (kurz, spezifisch)
+3. Reihenfolge der Schritte`;
+
+  const contextPaths = openTabs.length > 0 ? openTabs : Object.keys(vfs).filter(p => !vfs[p].binary).sort();
+  if (contextPaths.length > 0) {
+    p += `\n\n### PROJEKTDATEIEN ###\n`;
+    let totalChars = 0;
+    contextPaths.forEach(path => {
+      if (!vfs[path] || totalChars > 80000) return;
+      const raw = vfs[path].content;
+      const content = raw.length > 20000 ? raw.slice(0, 20000) + '\n// [... gekürzt]' : raw;
+      p += `\n--- ${path} ---\n${content}\n`;
+      totalChars += content.length;
+    });
+  }
+
+  if (agent.chatHistory.length > 0) {
+    p += '\n### BISHERIGES GESPRÄCH ###\n';
+    agent.chatHistory.slice(-6).forEach(m => {
+      p += `${m.role === 'user' ? 'Schüler' : 'Helper'}: "${m.text}"\n`;
+    });
+  }
+
+  p += `\n### AUFGABE ###\nSchüler: "${msg}"\nImplementierungsplan:`;
+  return p;
+}
+
+async function fetchPlan(planPrompt, modelKey) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 55000);
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: planPrompt, model: modelKey }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.error ? null : (data.text || null);
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
 }
 
 // ── 9. Chat ───────────────────────────────────────────────────────────────────
@@ -1452,12 +1544,27 @@ function handleSlashCommand(text, agent) {
     return true;
   }
 
+  if (cmd === 'run') {
+    const runLang = activeTab ? getRunLang(activeTab) : null;
+    if (!activeTab) { sysMsg('Keine Datei geöffnet.'); return true; }
+    if (runLang) toggleRunOutput();
+    else togglePreview();
+    return true;
+  }
+
+  if (cmd === 'think') {
+    document.getElementById('think-toggle').click();
+    return true;
+  }
+
   if (cmd === 'help') {
     sysMsgHtml(
       `<b>Slash-Befehle:</b><br>` +
       `<span style="font-size:11px;line-height:1.7">` +
       `<b>/model</b> — Modell anzeigen / wechseln<br>` +
       `<b>/learn</b> — Lernmodus an/aus<br>` +
+      `<b>/think</b> — Thinking Mode an/aus<br>` +
+      `<b>/run</b> — Vorschau / Programm ausführen<br>` +
       `<b>/enter</b> — Enter-Taste: senden ↔ neue Zeile<br>` +
       `<b>/clear</b> — Chat leeren<br>` +
       `<b>/agent</b> — neuen Agenten spawnen<br>` +
@@ -1479,6 +1586,13 @@ document.getElementById('learn-toggle').onclick = () => {
   const el = document.getElementById('learn-toggle');
   el.classList.toggle('active', agent.learnMode);
   sysMsg(agent.learnMode ? 'Lernmodus aktiviert — Änderungen werden erklärt.' : 'Lernmodus deaktiviert — kompakte Antworten.');
+};
+
+document.getElementById('think-toggle').onclick = () => {
+  const agent = agents.get(activeAgentId);
+  agent.thinkMode = !agent.thinkMode;
+  document.getElementById('think-toggle').classList.toggle('active', agent.thinkMode);
+  sysMsg(agent.thinkMode ? 'Thinking Mode aktiviert — erst planen, dann coden.' : 'Thinking Mode deaktiviert.');
 };
 
 document.getElementById('model-select').onchange = () => {
@@ -1590,6 +1704,7 @@ document.getElementById('preview-btn').onclick = togglePreview;
 
 const PISTON_LANGS = {
   py:   { language: 'python',     version: '*' },
+  java: { language: 'java',       version: '*' },
   c:    { language: 'c',          version: '*' },
   cpp:  { language: 'c++',        version: '*' },
   cs:   { language: 'csharp',     version: '*' },
@@ -1689,6 +1804,165 @@ async function runPython(code, out) {
   out.innerHTML += `\n<span class="${exitCode === 0 ? 'ro-exit0' : 'ro-exit1'}">─── Exit ${exitCode} ───</span>`;
 }
 
+// ── Java (TeaVM im Browser) ───────────────────────────────────────────────────
+let _javaWorker        = null;
+let _javaClasslibLoaded = false;
+let _javaRuntimeLoad   = null;
+let _javaNextId        = 0;
+const _javaResolvers   = new Map();
+
+async function ensureJavaWorker(out) {
+  if (_javaWorker) return;
+
+  out.innerHTML = `<span class="ro-info">Java-Compiler wird geladen (~6 MB, einmalig)…</span>\n`;
+  const origin = window.location.origin;
+
+  // Worker: load compiler.wasm via proxy, then install message handler
+  // After installWorker() we post 'initialized' ourselves since the v3 WASM may not
+  const workerSrc = `
+async function main() {
+  const { load } = await import('${origin}/api/teavm-proxy?file=runtime.js');
+  const teavm = await load('${origin}/api/teavm-proxy?file=compiler.wasm', { stackDeobfuscator: { enabled: false } });
+  teavm.exports.installWorker();
+  self.postMessage({ command: 'initialized' });
+}
+main().catch(e => self.postMessage({ command: 'error', message: String(e) }));`;
+
+  const blob = new Blob([workerSrc], { type: 'application/javascript' });
+  _javaWorker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+
+  // Log all worker messages for debugging + route to resolvers
+  _javaWorker.addEventListener('message', e => {
+    console.log('[TeaVM worker →]', e.data);
+    const msg = e.data;
+    let r = _javaResolvers.get(msg.id);
+    // compilation-complete doesn't include id in v3 — resolve whichever compile is pending
+    if (!r && msg.command === 'compilation-complete') r = _javaResolvers.values().next().value;
+    if (!r) return;
+    if (msg.command === 'ok' || msg.command === 'compilation-complete') r.resolve(msg);
+    else if (msg.command === 'compiler-diagnostic' || msg.command === 'diagnostic') r.diag?.(msg);
+  });
+
+  // Wait for worker ready (with 90s timeout — compiler.wasm is 4 MB)
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Worker-Timeout (>90s)')), 90000);
+    _javaWorker.addEventListener('message', function onInit(e) {
+      if (e.data?.command === 'initialized') { clearTimeout(timeout); _javaWorker.removeEventListener('message', onInit); resolve(); }
+      if (e.data?.command === 'error')       { clearTimeout(timeout); _javaWorker.removeEventListener('message', onInit); reject(new Error(e.data.message)); }
+    });
+  });
+
+  // TeaVM v3: send URLs — the WASM downloads the classlibaries itself via XHR.
+  // Simultaneously warm the browser HTTP cache so the WASM's fetch hits cache (near-instant).
+  out.innerHTML += `<span class="ro-info">Lade Classlibrary…</span>\n`;
+  const _classlibCacheWarm = Promise.all([
+    fetch(`${origin}/api/teavm-proxy?file=compile-classlib`),
+    fetch(`${origin}/api/teavm-proxy?file=runtime-classlib`),
+  ]).catch(() => null);
+  _javaWorker.postMessage({
+    command: 'load-classlib',
+    url: `${origin}/api/teavm-proxy?file=compile-classlib`,
+    runtimeUrl: `${origin}/api/teavm-proxy?file=runtime-classlib`,
+  });
+  // Wait for the cache-warm fetch to complete, then give WASM 500ms to process.
+  // No ACK from WASM — this is the best proxy we have for "classlib ready".
+  await Promise.race([_classlibCacheWarm, new Promise(r => setTimeout(r, 30000))]);
+  await new Promise(r => setTimeout(r, 500));
+  _javaClasslibLoaded = true;
+}
+
+async function runJava(code, out) {
+  try {
+    await ensureJavaWorker(out);
+  } catch (e) {
+    out.innerHTML += `<span class="ro-stderr">Fehler beim Laden des Java-Compilers: ${esc(String(e))}</span>\n`;
+    out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
+    return;
+  }
+
+  out.innerHTML = `<span class="ro-info">Kompiliere…</span>\n`;
+  const id = _javaNextId++;
+  const diagnostics = [];
+  let compiled;
+  try {
+    compiled = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => { _javaResolvers.delete(id); reject(new Error('Compile-Timeout')); }, 30000);
+      _javaResolvers.set(id, {
+        resolve: msg => { clearTimeout(timeout); _javaResolvers.delete(id); resolve(msg); },
+        diag: msg => diagnostics.push(msg),
+      });
+      _javaWorker.postMessage({ command: 'compile', text: code, id });
+    });
+  } catch (e) {
+    out.innerHTML += `<span class="ro-stderr">Kompilierungsfehler: ${esc(String(e))}</span>\n`;
+    out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
+    return;
+  }
+
+  out.innerHTML = '';
+  for (const d of diagnostics) {
+    const cls = d.severity === 'error' ? 'ro-stderr' : 'ro-info';
+    const loc = d.lineNumber ? ` (Zeile ${d.lineNumber})` : '';
+    out.innerHTML += `<span class="${cls}">${esc(d.severity.toUpperCase())}${loc}: ${esc(d.message)}</span>\n`;
+  }
+
+  if (compiled.status !== 'successful') {
+    out.innerHTML += `<span class="ro-exit1">─── Kompilierung fehlgeschlagen ───</span>`;
+    return;
+  }
+
+  out.innerHTML += `<span class="ro-info">Ausführen (java)…</span>\n`;
+
+  // Lazy-load TeaVM execution runtime (same runtime.js, different use)
+  if (!_javaRuntimeLoad) {
+    try {
+      const mod = await import(`${window.location.origin}/api/teavm-proxy?file=runtime.js`);
+      _javaRuntimeLoad = mod.load;
+    } catch (e) {
+      out.innerHTML += `<span class="ro-stderr">Laufzeitfehler: ${esc(String(e))}</span>\n`;
+      out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
+      return;
+    }
+  }
+
+  const wasmBuffer = new Uint8Array(compiled.script).buffer;
+  let stdout = '', stderr = '';
+  let program;
+  try {
+    program = await _javaRuntimeLoad(wasmBuffer, {
+      stackDeobfuscator: { enabled: false },
+      installImports(o) {
+        o.teavmConsole.putcharStdout = ch => { stdout += ch === 0xA ? '\n' : String.fromCharCode(ch); };
+        o.teavmConsole.putcharStderr = ch => { stderr += ch === 0xA ? '\n' : String.fromCharCode(ch); };
+      },
+    });
+  } catch (e) {
+    out.innerHTML += `<span class="ro-stderr">Laufzeitfehler: ${esc(String(e))}</span>\n`;
+    out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
+    return;
+  }
+
+  let exitCode = 0;
+  const mainFn = program.exports?.main ?? program.instance?.exports?.main;
+  if (typeof mainFn !== 'function') {
+    out.innerHTML += `<span class="ro-stderr">Keine main()-Methode gefunden. Die Klasse braucht: public static void main(String[] args)</span>\n`;
+    out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
+    return;
+  }
+  try {
+    mainFn([]);
+    await new Promise(r => setTimeout(r, 50)); // flush async teavm ops
+  } catch (e) {
+    stderr += (stderr ? '\n' : '') + String(e);
+    exitCode = 1;
+  }
+
+  out.innerHTML = out.innerHTML.replace(`<span class="ro-info">Ausführen (java)…</span>\n`, '');
+  if (stdout) out.innerHTML += `<span class="ro-stdout">${esc(stdout.replace(/\n$/, ''))}</span>`;
+  if (stderr) out.innerHTML += `<span class="ro-stderr">${esc(stderr.replace(/\n$/, ''))}</span>`;
+  out.innerHTML += `\n<span class="${exitCode === 0 ? 'ro-exit0' : 'ro-exit1'}">─── Exit ${exitCode} ───</span>`;
+}
+
 async function runCode() {
   const out  = document.getElementById('run-output');
   const lang = getRunLang(activeTab);
@@ -1699,6 +1973,9 @@ async function runCode() {
 
   // Python → Pyodide (im Browser, kein API-Call)
   if (lang.language === 'python') { await runPython(code, out); return; }
+
+  // Java → TeaVM (im Browser, kein API-Call)
+  if (lang.language === 'java') { await runJava(code, out); return; }
 
   // Alle anderen → Wandbox via /api/run
   out.innerHTML = `<span class="ro-info">Ausführen (${lang.language})…</span>\n`;
@@ -1908,7 +2185,7 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
 }
 
 const FALLBACK_CHAINS = {
-  qwen:             ['qwen', 'step', 'nemotron', 'gemma'],
+  qwen:             ['qwen', 'geminiflashlite', 'step', 'nemotron', 'gemma'],
   step:             ['step', 'nemotron', 'qwen', 'gemma'],
   nemotron:         ['nemotron', 'step', 'qwen', 'gemma'],
   gemma:            ['gemma', 'geminiflashlite', 'qwen', 'step', 'nemotron'],
@@ -1926,6 +2203,7 @@ async function sendMessage() {
 
   input.value = '';
   input.style.height = 'auto';
+  document.getElementById('char-counter').textContent = `0/${input.maxLength}`;
 
   if (text.startsWith('/')) {
     if (handleSlashCommand(text, agent)) return;
@@ -2013,7 +2291,25 @@ async function sendMessage() {
   const selectedModel = document.getElementById('model-select').value;
   agent.model = selectedModel;
   const chain = FALLBACK_CHAINS[selectedModel] ?? FALLBACK_CHAINS.geminiflashlite;
-  const builtPrompt = buildPrompt(text, agent);
+
+  // Think → Code: For slow-thinking models on complex prompts, first fetch a plan (no code),
+  // then pass it to the coding request. This splits thinking + coding across two 60s windows.
+  const planModels = new Set(['qwen', 'step', 'nemotron']);
+  let plan = null;
+  if (planModels.has(selectedModel) && (agent.thinkMode || text.length > 200)) {
+    typingTimer.textContent = 'Analysiert Aufgabe…';
+    typingText.style.animation = 'none'; void typingText.offsetHeight; typingText.style.animation = '';
+    typingText.textContent = 'Plant die Umsetzung…';
+    const planPrompt = buildPlanningPrompt(text, agent);
+    plan = await fetchPlan(planPrompt, selectedModel);
+    if (plan) {
+      typingTimer.textContent = 'Plan fertig. Schreibt…';
+      typingText.style.animation = 'none'; void typingText.offsetHeight; typingText.style.animation = '';
+      typingText.textContent = 'Jetzt wird\'s konkret…';
+    }
+  }
+
+  const builtPrompt = buildPrompt(text, agent, plan);
   let data = null, networkError = false, errorHandled = false, durationMs = 0;
 
   if (liveMode) {
@@ -2112,6 +2408,7 @@ async function sendMessage() {
         : null;
       const didAutoApply = !!(srResult || fileBlocks.length || activeTabBlock);
 
+      let pendingQuip = null;
       if (didAutoApply && !agent.learnMode) {
         const newFileNames = fileBlocks.map(m => m[1]);
         const fname = newFileNames.length ? newFileNames.join(', ') : (activeTab || 'Datei');
@@ -2135,6 +2432,7 @@ async function sendMessage() {
         quipDiv.className = 'chat-msg bot';
         quipDiv.textContent = doneMessages[Math.floor(Math.random() * doneMessages.length)];
         msgs.appendChild(quipDiv);
+        pendingQuip = quipDiv;
       } else {
         const botDiv = document.createElement('div');
         botDiv.className = 'chat-msg bot';
@@ -2178,6 +2476,20 @@ async function sendMessage() {
           const newCode = blk[2].replace(/\n$/, '');
           const newLines = (newCode.match(/\n/g) || []).length + 1;
           const newPath = dir + blk[1];
+          // Guard: model wrapped SEARCH/REPLACE markers inside a file-named fence
+          if (newCode.includes('<<<<<<< SEARCH')) {
+            const innerBase = srBase || (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
+            const innerResult = innerBase ? applySearchReplace(newCode, innerBase) : null;
+            if (innerResult) {
+              vfs[activeTab].content = innerResult.content;
+              vfs[activeTab].model.setValue(innerResult.content);
+              lastPath = activeTab;
+              sysMsgHtml(`✓ ${innerResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${innerResult.added}</span> <span style="color:#f44336">−${innerResult.removed}</span>`);
+            } else {
+              sysMsgHtml(`⚠ <b>${blk[1]}</b> — SEARCH-Text nicht gefunden (Datei evtl. zu groß für Kontext). Antwort oben anzeigen und manuell übernehmen.`);
+            }
+            continue;
+          }
           const mismatch = contentMismatch(blk[1], newCode);
           if (mismatch) {
             sysMsgHtml(`⚠ <b>${blk[1]}</b> übersprungen — Modell hat falschen Inhalt generiert (${mismatch}). Bitte nochmal versuchen oder anderes Modell wählen.`);
@@ -2197,19 +2509,48 @@ async function sendMessage() {
             sysMsgHtml(`✓ <b>${newPath}</b> angelegt &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
           }
         }
-        if (lastPath) { openTab(lastPath); renderTree(); }
+        if (lastPath) {
+          openTab(lastPath); renderTree();
+        } else if (pendingQuip) {
+          // All file blocks failed — remove the premature quip and show the bot response instead
+          msgs.removeChild(pendingQuip);
+          const botDiv = document.createElement('div');
+          botDiv.className = 'chat-msg bot';
+          const safeText = data.text.replace(/(<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE)/g, '```\n$1\n```');
+          botDiv.innerHTML = marked.parse(safeText);
+          msgs.appendChild(botDiv);
+        }
       } else if (activeTabBlock) {
         const newCode = activeTabBlock[2].replace(/\n$/, '');
-        const newLines = (newCode.match(/\n/g) || []).length + 1;
-        const isEmpty = !activeTab || vfs[activeTab]?.content.trim() === '';
-        const oldLines = isEmpty ? 0 : (vfs[activeTab].content.match(/\n/g) || []).length + 1;
-        // Guard: if new code is less than 50% of original, it's likely a partial — don't overwrite
-        if (!isEmpty && newLines < oldLines * 0.5) {
-          sysMsgHtml(`⚠ Modell hat nur einen Teil ausgegeben (${newLines} von ${oldLines} Zeilen) — Datei wurde <b>nicht</b> überschrieben. Bitte SEARCH/REPLACE verwenden oder Änderung manuell einfügen.`);
-        } else if (activeTab && vfs[activeTab]) {
-          vfs[activeTab].content = newCode;
-          vfs[activeTab].model.setValue(newCode);
-          sysMsgHtml(`✓ ${activeTab} wurde aktualisiert &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
+        // Guard: if the code block contains SEARCH/REPLACE markers, the model wrapped them in a
+        // fence instead of outputting them bare. Try to apply as SEARCH/REPLACE first.
+        if (newCode.includes('<<<<<<< SEARCH')) {
+          // Restore original content if streaming partially wrote the file
+          if (agent.srStreamBase !== null && !agent.srStreamApplied && activeTab && vfs[activeTab]?.model) {
+            vfs[activeTab].content = agent.srStreamBase;
+            vfs[activeTab].model.setValue(agent.srStreamBase);
+          }
+          const innerBase = srBase || (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
+          const innerResult = innerBase ? applySearchReplace(newCode, innerBase) : null;
+          if (innerResult) {
+            vfs[activeTab].content = innerResult.content;
+            vfs[activeTab].model.setValue(innerResult.content);
+            sysMsgHtml(`✓ ${innerResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${innerResult.added}</span> <span style="color:#f44336">−${innerResult.removed}</span>`);
+          } else {
+            sysMsgHtml('⚠ Konnte nicht automatisch angewendet werden — Suche fand keine exakte Übereinstimmung.');
+          }
+        } else {
+          const newLines = (newCode.match(/\n/g) || []).length + 1;
+          const isEmpty = !activeTab || vfs[activeTab]?.content.trim() === '';
+          const oldLines = isEmpty ? 0 : (vfs[activeTab].content.match(/\n/g) || []).length + 1;
+          // Guard: if new code is less than 50% of original, it's likely a partial — don't overwrite
+          if (!isEmpty && newLines < oldLines * 0.5) {
+            sysMsgHtml(`⚠ Modell hat nur einen Teil ausgegeben (${newLines} von ${oldLines} Zeilen) — Datei wurde <b>nicht</b> überschrieben. Bitte SEARCH/REPLACE verwenden oder Änderung manuell einfügen.`);
+          } else if (activeTab && vfs[activeTab]) {
+            vfs[activeTab].content = newCode;
+            vfs[activeTab].model.setValue(newCode);
+            sysMsgHtml(`✓ ${activeTab} wurde aktualisiert &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
+          }
         }
       }
 
