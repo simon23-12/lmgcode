@@ -19,8 +19,11 @@
 LMG Code/
 ├── index.html            # Komplette App — CSS + JS inline (single-file)
 ├── vercel.json           # Timeout 60s + CSP-Header für Monaco-Worker
+├── about.html            # About-Seite (Tech Stack, Kurzbefehle, Datenschutz)
 ├── api/
 │   ├── chat.js           # Vercel Serverless → OpenRouter + Google AI Studio (ESM)
+│   ├── run.js            # Code-Execution via Wandbox (C, C++, C#, TypeScript, Ruby)
+│   ├── jdoodle.js        # Java-Execution via JDoodle API
 │   └── package.json      # { "@google/generative-ai": "^0.21.0" }
 └── Logo LMG Code.jpg     # App-Logo (wird im Header angezeigt)
 ```
@@ -33,12 +36,14 @@ LMG Code/
 - **Markdown-Rendering:** marked.js 12.0.0 via CDN (nur Bot-Antworten)
 - **Icons:** Font Awesome 6.5.0 via CDN
 - **Backend:** Vercel Serverless Functions (Node.js, ESM)
-- **AI-Modelle:** Vier Modelle, User wählt im Dropdown — **Standard: Qwen**:
-  - **Qwen** (Standard): `qwen/qwen3.6-plus:free` via OpenRouter
+- **AI-Modelle:** Fünf Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
+  - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite-preview` via Google AI Studio
+  - **Qwen**: `qwen/qwen3.6-plus:free` via OpenRouter
   - **Step 3.5 Flash**: `stepfun/step-3.5-flash:free` via OpenRouter
   - **Nemotron 3 Super**: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
   - **Gemma 4 31B**: `gemma-4-31b-it` via Google AI Studio (`@google/generative-ai` SDK)
-- **Environment Variables:** `OPENROUTER_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`
+- **Code-Execution:** Pyodide (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby) · JDoodle API (Java)
+- **Environment Variables:** `OPENROUTER_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `JDOODLE_CLIENT_ID`, `JDOODLE_CLIENT_SECRET`
 
 ## Layout
 
@@ -135,6 +140,15 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 - Google AI Studio: `gemma-4-31b-it` via `@google/generative-ai` SDK (rate-limited, kostenlos)
 - Kriterien für Free-Modelle: Programming-Ranking auf openrouter.ai/collections/free-models + Kontext ≥ 128K (wegen großer Prompts)
 - $1-Spending-Limit auf dem OpenRouter-Key als Sicherheitsnetz; alle `:free`-Modelle kosten $0
+
+### Code-Execution
+
+| Sprache | Endpoint | Mechanismus |
+|---|---|---|
+| Python | — (Browser) | Pyodide 0.27.0 (WASM) |
+| C, C++, C#, TypeScript, Ruby | `api/run.js` | Wandbox API |
+| Java | `api/jdoodle.js` | JDoodle REST API |
+| HTML/CSS/JS | — (Browser) | Live-Vorschau im iframe |
 
 ## Frugal Coding Rules
 
