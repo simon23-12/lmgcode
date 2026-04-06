@@ -36,14 +36,15 @@ LMG Code/
 - **Markdown-Rendering:** marked.js 12.0.0 via CDN (nur Bot-Antworten)
 - **Icons:** Font Awesome 6.5.0 via CDN
 - **Backend:** Vercel Serverless Functions (Node.js, ESM)
-- **AI-Modelle:** Fünf Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
+- **AI-Modelle:** Sechs Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
   - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite-preview` via Google AI Studio
+  - **Llama 3.3 70B**: `meta-llama/llama-3.3-70b-versatile` via Groq
   - **Qwen**: `qwen/qwen3.6-plus:free` via OpenRouter
   - **Step 3.5 Flash**: `stepfun/step-3.5-flash:free` via OpenRouter
   - **Nemotron 3 Super**: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
   - **Gemma 4 31B**: `gemma-4-31b-it` via Google AI Studio (`@google/generative-ai` SDK)
 - **Code-Execution:** Pyodide (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby) · JDoodle API (Java)
-- **Environment Variables:** `OPENROUTER_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `JDOODLE_CLIENT_ID`, `JDOODLE_CLIENT_SECRET`
+- **Environment Variables:** `OPENROUTER_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `JDOODLE_CLIENT_ID`, `JDOODLE_CLIENT_SECRET`
 
 ## Layout
 
