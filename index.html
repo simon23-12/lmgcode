@@ -385,6 +385,7 @@
             <option value="nemotron">Nemotron 3 Super</option>
             <option value="gemma">Gemma 4 31B</option>
             <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
+            <option value="llama">Llama 3.3 70B</option>
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -1436,6 +1437,7 @@ const SLASH_MODEL_NAMES = {
   nemotron:       'Nemotron 3 Super',
   gemma:          'Gemma 4 31B',
   geminiflashlite:'Gemini 3.1 Flash Lite',
+  llama:          'Llama 3.3 70B',
 };
 
 function handleSlashCommand(text, agent) {
@@ -1458,7 +1460,7 @@ function handleSlashCommand(text, agent) {
       `1&nbsp;Qwen&nbsp;&nbsp;2&nbsp;Step&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;Lite` +
       `&nbsp;&nbsp;<kbd style="opacity:.5">Esc</kbd>&nbsp;=&nbsp;abbrechen</span>`
     );
-    const KEYS = { '1':'qwen', '2':'step', '3':'nemotron', '4':'gemma', '5':'geminiflashlite' };
+    const KEYS = { '1':'qwen', '2':'step', '3':'nemotron', '4':'gemma', '5':'geminiflashlite', '6':'llama' };
     const handler = (e) => {
       if (KEYS[e.key]) {
         e.preventDefault();
@@ -1804,162 +1806,31 @@ async function runPython(code, out) {
   out.innerHTML += `\n<span class="${exitCode === 0 ? 'ro-exit0' : 'ro-exit1'}">─── Exit ${exitCode} ───</span>`;
 }
 
-// ── Java (TeaVM im Browser) ───────────────────────────────────────────────────
-let _javaWorker        = null;
-let _javaClasslibLoaded = false;
-let _javaRuntimeLoad   = null;
-let _javaNextId        = 0;
-const _javaResolvers   = new Map();
-
-async function ensureJavaWorker(out) {
-  if (_javaWorker) return;
-
-  out.innerHTML = `<span class="ro-info">Java-Compiler wird geladen (~6 MB, einmalig)…</span>\n`;
-  const origin = window.location.origin;
-
-  // Worker: load compiler.wasm via proxy, then install message handler
-  // After installWorker() we post 'initialized' ourselves since the v3 WASM may not
-  const workerSrc = `
-async function main() {
-  const { load } = await import('${origin}/api/teavm-proxy?file=runtime.js');
-  const teavm = await load('${origin}/api/teavm-proxy?file=compiler.wasm', { stackDeobfuscator: { enabled: false } });
-  teavm.exports.installWorker();
-  self.postMessage({ command: 'initialized' });
-}
-main().catch(e => self.postMessage({ command: 'error', message: String(e) }));`;
-
-  const blob = new Blob([workerSrc], { type: 'application/javascript' });
-  _javaWorker = new Worker(URL.createObjectURL(blob), { type: 'module' });
-
-  // Log all worker messages for debugging + route to resolvers
-  _javaWorker.addEventListener('message', e => {
-    console.log('[TeaVM worker →]', e.data);
-    const msg = e.data;
-    let r = _javaResolvers.get(msg.id);
-    // compilation-complete doesn't include id in v3 — resolve whichever compile is pending
-    if (!r && msg.command === 'compilation-complete') r = _javaResolvers.values().next().value;
-    if (!r) return;
-    if (msg.command === 'ok' || msg.command === 'compilation-complete') r.resolve(msg);
-    else if (msg.command === 'compiler-diagnostic' || msg.command === 'diagnostic') r.diag?.(msg);
-  });
-
-  // Wait for worker ready (with 90s timeout — compiler.wasm is 4 MB)
-  await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Worker-Timeout (>90s)')), 90000);
-    _javaWorker.addEventListener('message', function onInit(e) {
-      if (e.data?.command === 'initialized') { clearTimeout(timeout); _javaWorker.removeEventListener('message', onInit); resolve(); }
-      if (e.data?.command === 'error')       { clearTimeout(timeout); _javaWorker.removeEventListener('message', onInit); reject(new Error(e.data.message)); }
-    });
-  });
-
-  // TeaVM v3: send URLs — the WASM downloads the classlibaries itself via XHR.
-  // Simultaneously warm the browser HTTP cache so the WASM's fetch hits cache (near-instant).
-  out.innerHTML += `<span class="ro-info">Lade Classlibrary…</span>\n`;
-  const _classlibCacheWarm = Promise.all([
-    fetch(`${origin}/api/teavm-proxy?file=compile-classlib`),
-    fetch(`${origin}/api/teavm-proxy?file=runtime-classlib`),
-  ]).catch(() => null);
-  _javaWorker.postMessage({
-    command: 'load-classlib',
-    url: `${origin}/api/teavm-proxy?file=compile-classlib`,
-    runtimeUrl: `${origin}/api/teavm-proxy?file=runtime-classlib`,
-  });
-  // Wait for the cache-warm fetch to complete, then give WASM 500ms to process.
-  // No ACK from WASM — this is the best proxy we have for "classlib ready".
-  await Promise.race([_classlibCacheWarm, new Promise(r => setTimeout(r, 30000))]);
-  await new Promise(r => setTimeout(r, 500));
-  _javaClasslibLoaded = true;
-}
-
+// ── Java (JDoodle API) ────────────────────────────────────────────────────────
 async function runJava(code, out) {
+  out.innerHTML = `<span class="ro-info">Kompiliere und führe aus (java)…</span>\n`;
+  let res, data;
   try {
-    await ensureJavaWorker(out);
-  } catch (e) {
-    out.innerHTML += `<span class="ro-stderr">Fehler beim Laden des Java-Compilers: ${esc(String(e))}</span>\n`;
-    out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
-    return;
-  }
-
-  out.innerHTML = `<span class="ro-info">Kompiliere…</span>\n`;
-  const id = _javaNextId++;
-  const diagnostics = [];
-  let compiled;
-  try {
-    compiled = await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => { _javaResolvers.delete(id); reject(new Error('Compile-Timeout')); }, 30000);
-      _javaResolvers.set(id, {
-        resolve: msg => { clearTimeout(timeout); _javaResolvers.delete(id); resolve(msg); },
-        diag: msg => diagnostics.push(msg),
-      });
-      _javaWorker.postMessage({ command: 'compile', text: code, id });
+    res = await fetch('/api/jdoodle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
     });
+    data = await res.json();
   } catch (e) {
-    out.innerHTML += `<span class="ro-stderr">Kompilierungsfehler: ${esc(String(e))}</span>\n`;
+    out.innerHTML += `<span class="ro-stderr">Netzwerkfehler: ${esc(String(e))}</span>\n`;
     out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
     return;
   }
-
+  if (!res.ok || data.message) {
+    out.innerHTML += `<span class="ro-stderr">${esc(data.message ?? 'Unbekannter Fehler')}</span>\n`;
+    out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
+    return;
+  }
+  const exitCode = data.exitCode ?? 0;
+  const output = (data.output ?? '').replace(/\n$/, '');
   out.innerHTML = '';
-  for (const d of diagnostics) {
-    const cls = d.severity === 'error' ? 'ro-stderr' : 'ro-info';
-    const loc = d.lineNumber ? ` (Zeile ${d.lineNumber})` : '';
-    out.innerHTML += `<span class="${cls}">${esc(d.severity.toUpperCase())}${loc}: ${esc(d.message)}</span>\n`;
-  }
-
-  if (compiled.status !== 'successful') {
-    out.innerHTML += `<span class="ro-exit1">─── Kompilierung fehlgeschlagen ───</span>`;
-    return;
-  }
-
-  out.innerHTML += `<span class="ro-info">Ausführen (java)…</span>\n`;
-
-  // Lazy-load TeaVM execution runtime (same runtime.js, different use)
-  if (!_javaRuntimeLoad) {
-    try {
-      const mod = await import(`${window.location.origin}/api/teavm-proxy?file=runtime.js`);
-      _javaRuntimeLoad = mod.load;
-    } catch (e) {
-      out.innerHTML += `<span class="ro-stderr">Laufzeitfehler: ${esc(String(e))}</span>\n`;
-      out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
-      return;
-    }
-  }
-
-  const wasmBuffer = new Uint8Array(compiled.script).buffer;
-  let stdout = '', stderr = '';
-  let program;
-  try {
-    program = await _javaRuntimeLoad(wasmBuffer, {
-      stackDeobfuscator: { enabled: false },
-      installImports(o) {
-        o.teavmConsole.putcharStdout = ch => { stdout += ch === 0xA ? '\n' : String.fromCharCode(ch); };
-        o.teavmConsole.putcharStderr = ch => { stderr += ch === 0xA ? '\n' : String.fromCharCode(ch); };
-      },
-    });
-  } catch (e) {
-    out.innerHTML += `<span class="ro-stderr">Laufzeitfehler: ${esc(String(e))}</span>\n`;
-    out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
-    return;
-  }
-
-  let exitCode = 0;
-  const mainFn = program.exports?.main ?? program.instance?.exports?.main;
-  if (typeof mainFn !== 'function') {
-    out.innerHTML += `<span class="ro-stderr">Keine main()-Methode gefunden. Die Klasse braucht: public static void main(String[] args)</span>\n`;
-    out.innerHTML += `<span class="ro-exit1">─── Exit 1 ───</span>`;
-    return;
-  }
-  try {
-    mainFn([]);
-    await new Promise(r => setTimeout(r, 50)); // flush async teavm ops
-  } catch (e) {
-    stderr += (stderr ? '\n' : '') + String(e);
-    exitCode = 1;
-  }
-
-  out.innerHTML = out.innerHTML.replace(`<span class="ro-info">Ausführen (java)…</span>\n`, '');
-  if (stdout) out.innerHTML += `<span class="ro-stdout">${esc(stdout.replace(/\n$/, ''))}</span>`;
-  if (stderr) out.innerHTML += `<span class="ro-stderr">${esc(stderr.replace(/\n$/, ''))}</span>`;
+  if (output) out.innerHTML += `<span class="ro-stdout">${esc(output)}</span>`;
   out.innerHTML += `\n<span class="${exitCode === 0 ? 'ro-exit0' : 'ro-exit1'}">─── Exit ${exitCode} ───</span>`;
 }
 
@@ -2190,6 +2061,7 @@ const FALLBACK_CHAINS = {
   nemotron:         ['nemotron', 'step', 'qwen', 'gemma'],
   gemma:            ['gemma', 'geminiflashlite', 'qwen', 'step', 'nemotron'],
   geminiflashlite:  ['geminiflashlite', 'gemma', 'qwen', 'step', 'nemotron'],
+  llama:            ['llama', 'geminiflashlite', 'qwen', 'step', 'nemotron', 'gemma'],
 };
 
 async function sendMessage() {

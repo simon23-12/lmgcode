@@ -11,8 +11,12 @@
 LMG Code/
 ├── index.html            # Komplette App — CSS + JS inline (single-file)
 ├── vercel.json           # Timeout 60s + CSP-Header für Monaco-Worker
+├── about.html            # About-Seite (Tech Stack, Kurzbefehle, Datenschutz)
 ├── api/
 │   ├── chat.js           # Vercel Serverless → OpenRouter + Google AI Studio (ESM)
+│   ├── run.js            # Code-Execution via Wandbox (C, C++, C#, TypeScript, Ruby)
+│   ├── jdoodle.js        # Java-Execution via JDoodle API
+│   ├── teavm-proxy.js    # (veraltet, nicht mehr genutzt)
 │   └── package.json      # { "@google/generative-ai": "^0.21.0" }
 └── Logo LMG Code.jpg     # App-Logo (wird im Header angezeigt)
 ```
@@ -25,13 +29,15 @@ LMG Code/
 - **Markdown-Rendering:** marked.js 12.0.0 via CDN (nur Bot-Antworten)
 - **Icons:** Font Awesome 6.5.0 via CDN
 - **Backend:** Vercel Serverless Functions (Node.js, ESM)
-- **AI-Modelle:** Fünf Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
+- **AI-Modelle:** Sechs Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
   - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite-preview` via Google AI Studio
+  - **Llama 3.3 70B**: `meta-llama/llama-3.3-70b-versatile` via Groq
   - **Qwen**: `qwen/qwen3.6-plus:free` via OpenRouter
   - **Step 3.5 Flash**: `stepfun/step-3.5-flash:free` via OpenRouter
   - **Nemotron 3 Super**: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
   - **Gemma 4 31B**: `gemma-4-31b-it` via Google AI Studio (`@google/generative-ai` SDK)
-- **Environment Variables:** `OPENROUTER_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`
+- **Code-Execution:** Pyodide (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby) · JDoodle API (Java, 22 Ausführungen/Tag)
+- **Environment Variables:** `OPENROUTER_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `JDOODLE_CLIENT_ID`, `JDOODLE_CLIENT_SECRET`
 
 ## Layout
 
@@ -129,6 +135,17 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 - Kriterien für Free-Modelle: Programming-Ranking auf openrouter.ai/collections/free-models + Kontext ≥ 128K (wegen großer Prompts)
 - $1-Spending-Limit auf dem OpenRouter-Key als Sicherheitsnetz; alle `:free`-Modelle kosten $0
 
+### Code-Execution
+
+| Sprache | Endpoint | Mechanismus |
+|---|---|---|
+| Python | — (Browser) | Pyodide 0.27.0 (WASM) |
+| C, C++, C#, TypeScript, Ruby | `api/run.js` | Wandbox API |
+| Java | `api/jdoodle.js` | JDoodle REST API (`POST https://api.jdoodle.com/v1/execute`) |
+| HTML/CSS/JS | — (Browser) | Live-Vorschau im iframe |
+
+**JDoodle:** `language: 'java'`, `versionIndex: '4'`. Free-Tier: 200 Credits/Tag (Stand April 2026, tatsächlich ~22 Ausführungen/Tag erfahrungsgemäß). Response-Felder: `output` (kombiniertes stdout+stderr), `statusCode` (Exit-Code).
+
 ## Frugal Coding Rules
 
 - Single-file Frontend — kein Build-Step, kein Bundler
@@ -153,5 +170,10 @@ Der Assistent **schreibt Code wenn gewünscht** — er ist kein Lehrer der nur H
 cd "/Users/sim/Documents/LMG Code"
 vercel --prod --yes
 ```
+
+Windows:
+- cd "C:\Users\simon\Desktop\Programmieren\lmgcode
+- vercel login
+- vercel --prod --yes
 
 Vercel setzt den API-Key automatisch (bereits konfiguriert unter Settings → Environment Variables).
