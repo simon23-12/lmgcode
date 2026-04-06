@@ -93,10 +93,12 @@ Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht 
 
 | Gewähltes Modell | Kette |
 |---|---|
-| Qwen (Standard) | Qwen → Step → Nemotron → Gemma |
+| Gemini Flash Lite (Standard) | Gemini Flash Lite → Gemma → Qwen → Step → Nemotron |
+| Llama | Llama → Gemini Flash Lite → Qwen → Step → Nemotron → Gemma |
+| Qwen | Qwen → Gemini Flash Lite → Step → Nemotron → Gemma |
 | Step | Step → Nemotron → Qwen → Gemma |
 | Nemotron | Nemotron → Step → Qwen → Gemma |
-| Gemma | Gemma → Qwen → Step → Nemotron |
+| Gemma | Gemma → Gemini Flash Lite → Qwen → Step → Nemotron |
 
 Die Fallback-Kette gilt für **beide Modi** (streaming und non-streaming):
 - Retryable-Fehler (429, 503, Timeout, Stream ohne `[DONE]` und ohne Content) → nächste Stufe
@@ -137,7 +139,7 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 - Kein SDK — nativer `fetch` gegen `https://openrouter.ai/api/v1/chat/completions` (OpenAI-kompatibel)
 - Non-Streaming: `tryOpenRouter(prompt, orModel)` gibt Text zurück oder wirft
 - Streaming: `streamOpenRouter(prompt, orModel, res)` pipet SSE-Body direkt via `res.write()`
-- OpenRouter-Modelle: `qwen/qwen3.6-plus:free` (Standard), `stepfun/step-3.5-flash:free`, `nvidia/nemotron-3-super-120b-a12b:free`
+- OpenRouter-Modelle: `qwen/qwen3.6-plus:free`, `stepfun/step-3.5-flash:free`, `nvidia/nemotron-3-super-120b-a12b:free`
 - Google AI Studio: `gemma-4-31b-it` via `@google/generative-ai` SDK (rate-limited, kostenlos)
 - Kriterien für Free-Modelle: Programming-Ranking auf openrouter.ai/collections/free-models + Kontext ≥ 128K (wegen großer Prompts)
 - $1-Spending-Limit auf dem OpenRouter-Key als Sicherheitsnetz; alle `:free`-Modelle kosten $0
