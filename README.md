@@ -1,3 +1,4 @@
+```
 ░▒▓█▓▒░      ░▒▓██████████████▓▒░ ░▒▓██████▓▒░        ░▒▓██████▓▒░ ░▒▓██████▓▒░░▒▓███████▓▒░░▒▓████████▓▒░ 
 ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        
 ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        
@@ -5,11 +6,12 @@
 ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        
 ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        
 ░▒▓████████▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░        ░▒▓██████▓▒░ ░▒▓██████▓▒░░▒▓███████▓▒░░▒▓████████▓▒░ 
-                                                                                                                                                                                                                    
+```
 
 **Type:** HTML, JS, CSS  
-**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–13) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code in VS Code.  
+**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–13) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
 **URL:** https://lmgcode.vercel.app  
+**Vercel-Projekt:** simons-projects-56ea3d55/lmgcode
 
 ## Dateistruktur
 
@@ -25,7 +27,18 @@ LMG Code/
 
 ## Tech Stack
 
-Siehe "about"
+- **Frontend:** Vanilla HTML/CSS/JS, keine Frameworks, kein Build-Step
+- **Editor:** Monaco Editor 0.47.0 via jsDelivr CDN (AMD-Loader)
+- **ZIP-Entpacken:** fflate 0.8.2 via CDN
+- **Markdown-Rendering:** marked.js 12.0.0 via CDN (nur Bot-Antworten)
+- **Icons:** Font Awesome 6.5.0 via CDN
+- **Backend:** Vercel Serverless Functions (Node.js, ESM)
+- **AI-Modelle:** Vier Modelle, User wählt im Dropdown — **Standard: Qwen**:
+  - **Qwen** (Standard): `qwen/qwen3.6-plus:free` via OpenRouter
+  - **Step 3.5 Flash**: `stepfun/step-3.5-flash:free` via OpenRouter
+  - **Nemotron 3 Super**: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
+  - **Gemma 4 31B**: `gemma-4-31b-it` via Google AI Studio (`@google/generative-ai` SDK)
+- **Environment Variables:** `OPENROUTER_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`
 
 ## Layout
 
@@ -72,6 +85,12 @@ Nur **geöffnete Tabs** werden als Kontext ans Modell geschickt — nicht alle D
 ### Fallback-Strategie (Frontend)
 Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht im Backend. Jeder Retry ist ein neuer HTTP-Request → neue Vercel-Instanz → frische 60 Sekunden.
 
+| Gewähltes Modell | Kette |
+|---|---|
+| Qwen (Standard) | Qwen → Step → Nemotron → Gemma |
+| Step | Step → Nemotron → Qwen → Gemma |
+| Nemotron | Nemotron → Step → Qwen → Gemma |
+| Gemma | Gemma → Qwen → Step → Nemotron |
 
 Die Fallback-Kette gilt für **beide Modi** (streaming und non-streaming):
 - Retryable-Fehler (429, 503, Timeout, Stream ohne `[DONE]` und ohne Content) → nächste Stufe
