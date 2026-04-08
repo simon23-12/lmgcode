@@ -9,7 +9,7 @@
 ```
 
 **Type:** HTML, JS, CSS  
-**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–13) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
+**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–10) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
 **URL:** https://lmgcode.vercel.app  
 **Vercel-Projekt:** simons-projects-56ea3d55/lmgcode
 
@@ -18,7 +18,7 @@
 ```
 LMG Code/
 ├── index.html            # Komplette App — CSS + JS inline (single-file)
-├── vercel.json           # Timeout 60s + CSP-Header für Monaco-Worker
+├── vercel.json           # maxDuration 300s + CSP-Header für Monaco-Worker
 ├── about.html            # About-Seite (Tech Stack, Kurzbefehle, Datenschutz)
 ├── api/
 │   ├── chat.js           # Vercel Serverless → OpenRouter + Google AI Studio (ESM)
@@ -36,9 +36,10 @@ LMG Code/
 - **Markdown-Rendering:** marked.js 12.0.0 via CDN (nur Bot-Antworten)
 - **Icons:** Font Awesome 6.5.0 via CDN
 - **Backend:** Vercel Serverless Functions (Node.js, ESM)
-- **AI-Modelle:** Sechs Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
+- **AI-Modelle:** Sieben Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
   - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite-preview` via Google AI Studio
   - **Llama 3.3 70B**: `meta-llama/llama-3.3-70b-versatile` via Groq
+  - **Kimi K2**: `moonshotai/kimi-k2-instruct-0905` via Groq
   - **Qwen**: `qwen/qwen3.6-plus:free` via OpenRouter
   - **Step 3.5 Flash**: `stepfun/step-3.5-flash:free` via OpenRouter
   - **Nemotron 3 Super**: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
@@ -86,10 +87,10 @@ Nur **geöffnete Tabs** werden als Kontext ans Modell geschickt — nicht alle D
 - **Streaming-Modus** (`stream: true`): antwortet mit `Content-Type: text/event-stream` (SSE), SSE-Response direkt an Client gepipet
 - **Non-Streaming-Modus**: antwortet mit `{ text, promptTokens, completionTokens }` oder `{ error, retryable }`
 - Input-Limit: 500.000 Zeichen
-- 57s AbortController-Timeout pro Request
+- 57s AbortController-Timeout für den initialen HTTP-Connect (Streaming-Funktionen: nur bis Headers empfangen)
 
 ### Fallback-Strategie (Frontend)
-Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht im Backend. Jeder Retry ist ein neuer HTTP-Request → neue Vercel-Instanz → frische 60 Sekunden.
+Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht im Backend. Jeder Retry ist ein neuer HTTP-Request → neue Vercel-Instanz → frische 300 Sekunden.
 
 | Gewähltes Modell | Kette |
 |---|---|
@@ -99,6 +100,7 @@ Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht 
 | Step | Step → Nemotron → Qwen → Gemma |
 | Nemotron | Nemotron → Step → Qwen → Gemma |
 | Gemma | Gemma → Gemini Flash Lite → Qwen → Step → Nemotron |
+| Kimi | Kimi → Step → Gemini Flash Lite → Qwen |
 
 Die Fallback-Kette gilt für **beide Modi** (streaming und non-streaming):
 - Retryable-Fehler (429, 503, Timeout, Stream ohne `[DONE]` und ohne Content) → nächste Stufe
@@ -129,6 +131,9 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 - `fetchStream(prompt, modelKey, onStreamStart, onSRDetected, agent)` — versucht genau ein Modell
   - Schlägt fehl **vor** Stream-Start (429, Timeout auf Connect): gibt `{ error, retryable }` zurück, `onStreamStart` wird **nicht** aufgerufen → Typing-Indikator bleibt, nächstes Modell wird versucht
   - Stream startet erfolgreich: ruft `onStreamStart()` auf (Typing-Indikator weg), streamt Chunks
+  - **Zweiphasiges Timeout-Modell:**
+    - **Phase 1 — Connect:** 57s AbortController bis HTTP-Response-Headers (löst bei Streaming fast sofort auf, da Backend `res.flushHeaders()` sofort sendet)
+    - **Phase 2 — First-Token:** 60s Timer startet nach `onStreamStart()`. Kommt kein Token → `controller.abort()` → `{ error, retryable: true }` → Fallback. Kommt erster Token → Timer gelöscht → Stream läuft bis zu Vercels 300s Hard-Limit
   - Monaco-Update via `requestAnimationFrame` (throttled) — `extractStreamingCode()` parst offene/geschlossene Codeblöcke
   - Stream endet mit `[DONE]` → Erfolg: `{ text }`
   - Stream endet abrupt ohne Content → `{ error, retryable: true }` → nächstes Modell
