@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LMG Code</title>
+  <link rel="icon" type="image/jpeg" href="/Logo LMG Code.jpg">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -23,6 +24,26 @@
       --input-bg:      #3c3c3c;
       --scrollbar:     #424242;
     }
+    body.light-mode {
+      --bg:            #ffffff;
+      --sidebar-bg:    #f3f3f3;
+      --tab-inactive:  #ececec;
+      --tab-active:    #ffffff;
+      --border:        #d4d4d4;
+      --text:          #1e1e1e;
+      --text-dim:      #6e6e6e;
+      --chat-bot-bg:   #e8e8e8;
+      --input-bg:      #ffffff;
+      --scrollbar:     #c0c0c0;
+    }
+    body.light-mode .upload-btn:hover { background: #dcdcdc; }
+    body.light-mode .tab:hover { background: #e0e0e0; color: var(--text); }
+    body.light-mode .chat-msg.bot pre { background: #f0f0f0; }
+    body.light-mode .chat-msg.bot code { background: rgba(0,0,0,0.07); }
+    body.light-mode .chat-msg.bot strong { color: #000; }
+    body.light-mode #ctx-menu { background: #ffffff; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+    body.light-mode .ctx-item:hover { background: rgba(0,0,0,0.06); }
+    body.light-mode #header-byline .sep { color: rgba(255,255,255,0.4); }
 
     html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
@@ -134,6 +155,13 @@
     #run-output .ro-info   { color: #6b7280; font-style: italic; }
     #run-output .ro-exit0  { color: #4ade80; }
     #run-output .ro-exit1  { color: #f87171; }
+    #run-output .ro-input-prompt { color: #e0e0e0; }
+    #run-output .ro-input-row { display: inline-flex; align-items: center; gap: 4px; }
+    #run-output .ro-input { background: #1a1a2e; color: #e0e0e0; border: 1px solid #4b5563;
+      padding: 1px 6px; font-family: inherit; font-size: inherit; outline: none; min-width: 160px; }
+    #run-output .ro-input-btn { background: #374151; color: #e0e0e0; border: none;
+      padding: 2px 8px; cursor: pointer; font-family: inherit; font-size: inherit; }
+    #run-output .ro-input-btn:hover { background: #4b5563; }
 
     #preview-btn, #run-btn {
       margin-left: auto; margin-right: 6px; align-self: center; flex-shrink: 0;
@@ -209,6 +237,16 @@
       flex-shrink: 0; transition: background 0.15s;
     }
     #learn-toggle.active .toggle-dot { background: #22c55e; }
+
+    /* ── Undo Button ── */
+    #undo-btn {
+      display: none; align-items: center; gap: 5px; cursor: pointer; user-select: none;
+      font-size: 10px; color: var(--text-dim); border: 1px solid var(--border);
+      border-radius: 12px; padding: 2px 8px; background: none;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    #undo-btn.visible { display: flex; }
+    #undo-btn:hover { border-color: var(--accent); color: var(--text); }
 
     /* ── Think Mode Toggle ── */
     #think-toggle {
@@ -300,7 +338,6 @@
 
     #chat-stats { font-size: 10px; color: var(--text-dim); margin-top: 5px; display: flex; gap: 10px; }
     #chat-stats span { opacity: 0.7; }
-    #input-hint { font-size: 10px; color: var(--text-dim); margin-top: 3px; text-align: right; }
 
     /* ── Context Menu ── */
     #ctx-menu {
@@ -380,18 +417,22 @@
         <div id="chat-header-title">
           <i class="fa-solid fa-robot"></i>
           <select id="model-select" title="Modell wählen">
-            <option value="qwen">Qwen 3.6 Plus</option>
+            <option value="qwen">Qwen3 Coder 480B</option>
             <option value="step">Step 3.5 Flash</option>
             <option value="nemotron">Nemotron 3 Super</option>
             <option value="gemma">Gemma 4 31B</option>
             <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
             <option value="llama">Llama 3.3 70B</option>
+            <option value="kimi">Kimi K2</option>
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
           <div id="learn-toggle" title="Lernmodus: Änderungen werden erklärt">
             <span class="toggle-dot"></span>Lernmodus
           </div>
+          <button id="undo-btn" title="Letzte KI-Änderung rückgängig machen">
+            <i class="fa-solid fa-rotate-left"></i> Undo
+          </button>
           <button id="add-agent-btn" title="Neuen Agenten spawnen">
             <i class="fa-solid fa-plus"></i>
           </button>
@@ -416,7 +457,6 @@
         </div>
         <div id="chat-stats"></div>
         <div id="char-counter">0/800</div>
-        <div id="input-hint">Ctrl+Enter senden</div>
       </div>
     </div>
 
@@ -475,6 +515,7 @@ function createAgent() {
     srStreamBase: null,
     srStreamApplied: false,
     streamCreatedFile: null,
+    undoSnapshot: null,
     messagesEl: pane,
   });
   return id;
@@ -517,6 +558,7 @@ function switchAgent(id) {
   const learnToggle = document.getElementById('learn-toggle');
   learnToggle.classList.toggle('active', agent.learnMode);
   document.getElementById('think-toggle').classList.toggle('active', agent.thinkMode);
+  document.getElementById('undo-btn').classList.toggle('visible', !!agent.undoSnapshot);
   document.getElementById('send-btn').disabled = agent.isTyping;
   const msgs = document.getElementById('chat-messages');
   msgs.scrollTop = msgs.scrollHeight;
@@ -831,8 +873,11 @@ function initResizers() {
 
 // ── 5. Monaco Init ────────────────────────────────────────────────────────────
 function initMonaco() {
+  const savedMode = localStorage.getItem('colorMode');
+  if (savedMode === 'light') document.body.classList.add('light-mode');
+
   editor = monaco.editor.create(document.getElementById('monaco-container'), {
-    theme:                     'vs-dark',
+    theme:                     savedMode === 'light' ? 'vs' : 'vs-dark',
     automaticLayout:           false,
     minimap:                   { enabled: false },
     fontSize:                  13,
@@ -1226,8 +1271,16 @@ function finishRename(oldPath, newName) {
 function buildPrompt(msg, agent, plan) {
   const learnExtra = agent.learnMode
     ? `\n- LERNMODUS AKTIV: Erkläre jede Änderung ausführlich Schritt für Schritt — was wurde geändert, warum, und was bewirkt es. Der Schüler soll wirklich verstehen, was passiert.`
-    : `\n- Führe Aufgaben direkt aus. Antworte kurz und präzise — keine langen Einleitungen, kein Wiederholen der Aufgabe.
-- Wenn du Dateien analysierst bevor du antwortest, schreibe als erstes nur: "Schaue mir die Dateien an." — nichts anderes als Einleitung.`;
+    : `\n- Führe Aufgaben direkt aus. Antworte kurz und präzise — keine langen Einleitungen, kein Wiederholen der Aufgabe.`;
+
+  const contextPaths = openTabs.length > 0
+    ? openTabs
+    : Object.keys(vfs).filter(p => !vfs[p].binary).sort();
+
+  const hasFiles = contextPaths.length > 0;
+  const quipInstruction = hasFiles
+    ? ` oder (wenn du zuerst die Dateien analysierst) mit "Schaue mir die Dateien an."`
+    : ``;
 
   let p = `Du bist ein hilfreicher Coding-Assistent für Schüler am Leibniz-Montessori-Gymnasium Düsseldorf (Klassen 5–10).
 
@@ -1237,13 +1290,9 @@ Regeln:
 - Beantworte NUR Fragen zu Programmierung und Informatik
 - Antworte in der Sprache des Schülers (Deutsch oder Englisch)
 - Verwende immer Markdown-Codeblöcke — und schreibe dabei immer den **Dateinamen** als Bezeichner (z.B. \`\`\`index.html, \`\`\`Main.java, \`\`\`README.md) — NICHT die Sprache (\`\`\`html, \`\`\`java, \`\`\`markdown)
-- Beginne NIEMALS mit "Verstanden", "Ich baue jetzt", "Natürlich" oder ähnlichen Einleitungen — starte direkt mit der Antwort oder (wenn Dateien vorhanden) mit "Schaue mir die Dateien an."${learnExtra}`;
+- Beginne NIEMALS mit "Verstanden", "Ich baue jetzt", "Natürlich" oder ähnlichen Einleitungen — starte direkt mit der Antwort${quipInstruction}${learnExtra}`;
 
-  const contextPaths = openTabs.length > 0
-    ? openTabs
-    : Object.keys(vfs).filter(p => !vfs[p].binary).sort();
-
-  if (contextPaths.length > 0) {
+  if (hasFiles) {
     const label = openTabs.length > 0 ? 'geöffnete Tabs' : 'alle Projektdateien';
     p += `\n\n### PROJEKTDATEIEN (${label}) ###\n`;
     let totalChars = 0;
@@ -1432,12 +1481,13 @@ function sysMsg(text) {
 
 // ── Slash Commands ─────────────────────────────────────────────────────────
 const SLASH_MODEL_NAMES = {
-  qwen:           'Qwen 3.6 Plus',
+  qwen:           'Qwen3 Coder 480B',
   step:           'Step 3.5 Flash',
   nemotron:       'Nemotron 3 Super',
   gemma:          'Gemma 4 31B',
   geminiflashlite:'Gemini 3.1 Flash Lite',
   llama:          'Llama 3.3 70B',
+  kimi:           'Kimi K2',
 };
 
 function handleSlashCommand(text, agent) {
@@ -1485,6 +1535,15 @@ function handleSlashCommand(text, agent) {
     localStorage.setItem(ENTER_KEY, next);
     sysMsg(next ? 'Enter sendet Prompt.' : 'Enter = neue Zeile. Ctrl+Enter sendet.');
     applyEnterMode(next);
+    return true;
+  }
+
+  if (cmd === 'undo') {
+    if (!agent.undoSnapshot) {
+      sysMsg('Nichts zum Rückgängigmachen.');
+    } else {
+      document.getElementById('undo-btn').click();
+    }
     return true;
   }
 
@@ -1559,6 +1618,14 @@ function handleSlashCommand(text, agent) {
     return true;
   }
 
+  if (cmd === 'mode') {
+    const isLight = document.body.classList.toggle('light-mode');
+    monaco.editor.setTheme(isLight ? 'vs' : 'vs-dark');
+    localStorage.setItem('colorMode', isLight ? 'light' : 'dark');
+    sysMsg(isLight ? 'Hell-Modus aktiviert.' : 'Dunkel-Modus aktiviert.');
+    return true;
+  }
+
   if (cmd === 'help') {
     sysMsgHtml(
       `<b>Slash-Befehle:</b><br>` +
@@ -1566,8 +1633,10 @@ function handleSlashCommand(text, agent) {
       `<b>/model</b> — Modell anzeigen / wechseln<br>` +
       `<b>/learn</b> — Lernmodus an/aus<br>` +
       `<b>/think</b> — Thinking Mode an/aus<br>` +
+      `<b>/mode</b> — Hell-/Dunkel-Modus umschalten<br>` +
       `<b>/run</b> — Vorschau / Programm ausführen<br>` +
       `<b>/enter</b> — Enter-Taste: senden ↔ neue Zeile<br>` +
+      `<b>/undo</b> — letzte KI-Änderung rückgängig<br>` +
       `<b>/clear</b> — Chat leeren<br>` +
       `<b>/agent</b> — neuen Agenten spawnen<br>` +
       `<b>/add</b> — neue Datei anlegen<br>` +
@@ -1581,6 +1650,23 @@ function handleSlashCommand(text, agent) {
 
   return false;
 }
+
+document.getElementById('undo-btn').onclick = () => {
+  const agent = agents.get(activeAgentId);
+  if (!agent?.undoSnapshot) return;
+  const { path, content } = agent.undoSnapshot;
+  if (vfs[path]?.model) {
+    vfs[path].content = content;
+    vfs[path].model.setValue(content);
+    if (activeTab !== path) {
+      // Switch to the affected file so user sees the result
+      openTab(path);
+    }
+    sysMsg('Letzte KI-Änderung rückgängig gemacht.');
+  }
+  agent.undoSnapshot = null;
+  document.getElementById('undo-btn').classList.remove('visible');
+};
 
 document.getElementById('learn-toggle').onclick = () => {
   const agent = agents.get(activeAgentId);
@@ -1754,56 +1840,139 @@ function toggleRunOutput() {
   }
 }
 
-// ── Pyodide (Python im Browser) ───────────────────────────────────────────────
-let _pyodide = null;
-let _pyodidePromise = null;
+// ── Pyodide Worker (Python im Browser, non-blocking) ─────────────────────────
+let _pyWorker = null;
+let _pyWorkerReady = null;
+let _pyInputSAB = null;     // SharedArrayBuffer(8):    Int32[0]=signal, Int32[1]=byteLen
+let _pyInputDataSAB = null; // SharedArrayBuffer(4096): UTF-8 bytes of user input
 
-async function getPyodide(out) {
-  if (_pyodide) return _pyodide;
-  if (!_pyodidePromise) {
-    _pyodidePromise = (async () => {
-      out.innerHTML = `<span class="ro-info">Python-Umgebung wird geladen (~10 MB, einmalig)…</span>\n`;
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js';
-        s.onload = resolve; s.onerror = reject;
-        document.head.appendChild(s);
+const _PYODIDE_WORKER = `
+importScripts('https://cdn.jsdelivr.net/pyodide/v0.27.0/full/pyodide.js');
+let pyodide = null, inputSig = null, inputData = null;
+
+self.onmessage = async (e) => {
+  const msg = e.data;
+
+  if (msg.type === 'init') {
+    inputSig  = new Int32Array(msg.inputSAB);
+    inputData = new Uint8Array(msg.inputDataSAB);
+    try {
+      pyodide = await loadPyodide();
+      pyodide.globals.set('_jsInput', (prompt) => {
+        self.postMessage({ type: 'input_request', prompt: String(prompt ?? '') });
+        Atomics.store(inputSig, 0, 0);
+        Atomics.wait(inputSig, 0, 0);
+        const len = Atomics.load(inputSig, 1);
+        return new TextDecoder().decode(inputData.slice(0, len));
       });
-      const py = await loadPyodide();
-      // Override input() → browser prompt
-      py.runPython("import builtins; builtins.input = lambda p='': __import__('js').prompt(p) or ''");
-      _pyodide = py;
-      return py;
-    })();
+      pyodide.runPython(
+        "import builtins, js\\n" +
+        "builtins.input = lambda p='': js._jsInput(str(p) if p else '')"
+      );
+      self.postMessage({ type: 'ready' });
+    } catch(err) {
+      self.postMessage({ type: 'init_error', message: String(err) });
+    }
+    return;
   }
-  return _pyodidePromise;
+
+  if (msg.type === 'run') {
+    pyodide.setStdout({ batched: s => self.postMessage({ type: 'stdout', text: s }) });
+    pyodide.setStderr({ batched: s => self.postMessage({ type: 'stderr', text: s }) });
+    let exitCode = 0;
+    try {
+      await pyodide.runPythonAsync(msg.code);
+    } catch(err) {
+      self.postMessage({ type: 'stderr', text: err.message });
+      exitCode = 1;
+    }
+    self.postMessage({ type: 'done', exitCode });
+  }
+};
+`;
+
+function _ensurePyWorker(out) {
+  if (_pyWorker) return _pyWorkerReady;
+  _pyInputSAB     = new SharedArrayBuffer(8);
+  _pyInputDataSAB = new SharedArrayBuffer(4096);
+  const blob = new Blob([_PYODIDE_WORKER], { type: 'application/javascript' });
+  _pyWorker = new Worker(URL.createObjectURL(blob));
+  _pyWorkerReady = new Promise((resolve, reject) => {
+    const h = (e) => {
+      if (e.data.type === 'ready')      { _pyWorker.removeEventListener('message', h); resolve(); }
+      if (e.data.type === 'init_error') { _pyWorker.removeEventListener('message', h); reject(new Error(e.data.message)); }
+    };
+    _pyWorker.addEventListener('message', h);
+  });
+  out.innerHTML = `<span class="ro-info">Python-Umgebung wird geladen (~10 MB, einmalig)…</span>\n`;
+  _pyWorker.postMessage({ type: 'init', inputSAB: _pyInputSAB, inputDataSAB: _pyInputDataSAB });
+  return _pyWorkerReady;
+}
+
+function _submitPyInput(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const value = el.value;
+  const row = document.getElementById('py-row-' + id);
+  if (row) row.outerHTML = `<span class="ro-stdout">${esc(value)}</span>\n`;
+  const enc = new TextEncoder().encode(value);
+  const sig  = new Int32Array(_pyInputSAB);
+  const data = new Uint8Array(_pyInputDataSAB);
+  const len  = Math.min(enc.length, data.length);
+  data.set(enc.subarray(0, len));
+  Atomics.store(sig, 1, len);
+  Atomics.store(sig, 0, 1);
+  Atomics.notify(sig, 0);
 }
 
 async function runPython(code, out) {
-  let pyodide;
+  if (typeof SharedArrayBuffer === 'undefined') {
+    out.innerHTML = `<span class="ro-stderr">SharedArrayBuffer nicht verfügbar — bitte Seite neu laden (HTTPS erforderlich).</span>`;
+    return;
+  }
   try {
-    pyodide = await getPyodide(out);
-  } catch (e) {
+    await _ensurePyWorker(out);
+  } catch(e) {
     out.innerHTML += `<span class="ro-stderr">Pyodide konnte nicht geladen werden: ${esc(String(e))}</span>`;
     return;
   }
   out.innerHTML = `<span class="ro-info">Ausführen (python)…</span>\n`;
 
-  let stdout = '', stderr = '';
-  pyodide.setStdout({ batched: s => { stdout += s; } });
-  pyodide.setStderr({ batched: s => { stderr += s; } });
-
-  let exitCode = 0;
-  try {
-    await pyodide.runPythonAsync(code);
-  } catch (e) {
-    stderr += e.message;
-    exitCode = 1;
-  }
-
-  if (stdout) out.innerHTML += `<span class="ro-stdout">${esc(stdout)}</span>`;
-  if (stderr) out.innerHTML += `<span class="ro-stderr">${esc(stderr)}</span>`;
-  out.innerHTML += `\n<span class="${exitCode === 0 ? 'ro-exit0' : 'ro-exit1'}">─── Exit ${exitCode} ───</span>`;
+  await new Promise((resolve) => {
+    function onMsg(e) {
+      const msg = e.data;
+      if (msg.type === 'stdout') {
+        out.insertAdjacentHTML('beforeend', `<span class="ro-stdout">${esc(msg.text)}</span>`);
+        out.scrollTop = out.scrollHeight;
+      } else if (msg.type === 'stderr') {
+        out.insertAdjacentHTML('beforeend', `<span class="ro-stderr">${esc(msg.text)}</span>`);
+        out.scrollTop = out.scrollHeight;
+      } else if (msg.type === 'input_request') {
+        const id = 'pyi-' + Date.now();
+        out.insertAdjacentHTML('beforeend',
+          `<span class="ro-input-prompt">${esc(msg.prompt)}</span>` +
+          `<span id="py-row-${id}" class="ro-input-row">` +
+          `<input id="${id}" class="ro-input" type="text" autocomplete="off" spellcheck="false">` +
+          `<button class="ro-input-btn" onclick="_submitPyInput('${id}')">↵</button></span>\n`
+        );
+        out.scrollTop = out.scrollHeight;
+        const el = document.getElementById(id);
+        if (el) {
+          el.focus();
+          el.addEventListener('keydown', ev => { if (ev.key === 'Enter') _submitPyInput(id); });
+        }
+      } else if (msg.type === 'done') {
+        _pyWorker.removeEventListener('message', onMsg);
+        out.insertAdjacentHTML('beforeend',
+          `\n<span class="${msg.exitCode === 0 ? 'ro-exit0' : 'ro-exit1'}">─── Exit ${msg.exitCode} ───</span>`
+        );
+        out.scrollTop = out.scrollHeight;
+        resolve();
+      }
+    }
+    _pyWorker.addEventListener('message', onMsg);
+    _pyWorker.postMessage({ type: 'run', code });
+  });
 }
 
 // ── Java (JDoodle API) ────────────────────────────────────────────────────────
@@ -1875,6 +2044,13 @@ document.getElementById('run-btn').onclick = toggleRunOutput;
 
 // ── 9b. Streaming helpers ─────────────────────────────────────────────────────
 
+function inferFilename(lang) {
+  const map = { html: 'index.html', css: 'style.css', js: 'script.js', javascript: 'script.js',
+                python: 'main.py', py: 'main.py', java: 'Main.java', c: 'main.c',
+                cpp: 'main.cpp', cs: 'main.cs', ts: 'main.ts', typescript: 'main.ts', ruby: 'main.rb' };
+  return map[lang?.toLowerCase()] || (lang ? lang + '.txt' : 'output.txt');
+}
+
 function extractStreamingCode(text) {
   // Don't live-update during streaming if it's a SEARCH/REPLACE response (full or partial)
   if (text.includes('<<<<<<<')) return null;
@@ -1885,11 +2061,13 @@ function extractStreamingCode(text) {
 }
 
 function applySearchReplace(text, currentContent) {
+  // Normalize Llama's reversed separator format: ">>>>>>>\n=======" → "======="
+  const normalizedText = text.replace(/\n>>>>>>>[^\S\n]*\r?\n(?========)/g, '\n');
   const blockPattern = /<<<<<<< SEARCH\r?\n([\s\S]*?)\r?\n=======\r?\n([\s\S]*?)\r?\n>>>>>>> REPLACE/g;
   let result = currentContent;
   let applied = 0, added = 0, removed = 0;
   let match;
-  while ((match = blockPattern.exec(text)) !== null) {
+  while ((match = blockPattern.exec(normalizedText)) !== null) {
     const search  = match[1];
     const replace = match[2];
     const normSearch = search.normalize('NFC');
@@ -1963,6 +2141,9 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
   // Stream connected — only now dismiss the typing indicator
   onStreamStart();
 
+  // Phase 2: if no token arrives within 60s, abort and retry next model
+  let firstTokenTimer = setTimeout(() => controller.abort(), 60000);
+
   let fullText = '';
   let rafPending = false;
   let gotDone = false;
@@ -1987,29 +2168,39 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
         renderTree();
       } else if (activeTab && vfs[activeTab]?.model) {
         agent.srStreamBase = vfs[activeTab].model.getValue();
+      } else if (!activeTab && fenceName && !fenceName.includes('.')) {
+        // Language tag (e.g. ```html) with no file open — infer a filename and create the file
+        const targetPath = inferFilename(fenceName);
+        agent.srStreamBase = '';
+        agent.streamCreatedFile = targetPath;
+        if (!vfs[targetPath]) addFile(targetPath, '');
+        openTab(targetPath);
+        renderTree();
       } else {
         return; // no target yet
       }
     }
 
     if (!activeTab || !vfs[activeTab]?.model) return;
+    const targetPath = activeTab; // capture now — stream-end may change activeTab before RAF fires
     rafPending = true;
     requestAnimationFrame(() => {
       rafPending = false;
+      if (!vfs[targetPath]?.model) return;
       if (fullText.includes('<<<<<<< SEARCH')) {
         // Live-apply each completed SEARCH/REPLACE block as it arrives
         if (!srNotified) { srNotified = true; onSRDetected?.(); }
         const result = applySearchReplace(fullText, agent.srStreamBase);
         if (result) {
           agent.srStreamApplied = true;
-          vfs[activeTab].model.setValue(result.content);
-          vfs[activeTab].content = result.content;
+          vfs[targetPath].model.setValue(result.content);
+          vfs[targetPath].content = result.content;
         }
       } else {
         const code = extractStreamingCode(fullText);
-        if (code !== null && vfs[activeTab]?.model) {
-          vfs[activeTab].model.setValue(code);
-          vfs[activeTab].content = code;
+        if (code !== null) {
+          vfs[targetPath].model.setValue(code);
+          vfs[targetPath].content = code;
         }
       }
     });
@@ -2037,13 +2228,18 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
           if (parsed.error) return { error: parsed.error, retryable: !!parsed.retryable };
           if (parsed.usage) streamUsage = parsed.usage;
           const delta = parsed.choices?.[0]?.delta?.content ?? '';
-          if (delta) { fullText += delta; scheduleMonacoUpdate(); }
+          if (delta) {
+            if (firstTokenTimer) { clearTimeout(firstTokenTimer); firstTokenTimer = null; }
+            fullText += delta;
+            scheduleMonacoUpdate();
+          }
         } catch {}
       }
     }
   } catch (err) {
     if (err.name !== 'AbortError') throw err;
   }
+  clearTimeout(firstTokenTimer);
 
   // Stream ended without [DONE] and no content → retryable (Vercel/model timeout)
   if (!gotDone && !fullText) return { error: 'Timeout', retryable: true };
@@ -2060,8 +2256,9 @@ const FALLBACK_CHAINS = {
   step:             ['step', 'nemotron', 'qwen', 'gemma'],
   nemotron:         ['nemotron', 'step', 'qwen', 'gemma'],
   gemma:            ['gemma', 'geminiflashlite', 'qwen', 'step', 'nemotron'],
-  geminiflashlite:  ['geminiflashlite', 'gemma', 'qwen', 'step', 'nemotron'],
+  geminiflashlite:  ['geminiflashlite', 'qwen', 'step', 'nemotron', 'llama'],
   llama:            ['llama', 'geminiflashlite', 'qwen', 'step', 'nemotron', 'gemma'],
+  kimi:             ['kimi', 'step', 'geminiflashlite', 'qwen'],
 };
 
 async function sendMessage() {
@@ -2072,6 +2269,8 @@ async function sendMessage() {
   agent.srStreamBase    = null;
   agent.srStreamApplied = false;
   agent.streamCreatedFile = null;
+  agent.undoSnapshot    = null;
+  document.getElementById('undo-btn').classList.remove('visible');
 
   input.value = '';
   input.style.height = 'auto';
@@ -2190,6 +2389,10 @@ async function sendMessage() {
     function onStreamStart() {
       if (streamStarted) return;
       streamStarted = true;
+      if (activeTab && vfs[activeTab]?.content !== undefined) {
+        agent.undoSnapshot = { path: activeTab, content: vfs[activeTab].content };
+        document.getElementById('undo-btn').classList.add('visible');
+      }
       clearInterval(phraseInterval);
       const hasContent = activeTab && vfs[activeTab]?.content?.trim();
       const vfsHasFiles = Object.keys(vfs).length > 0;
@@ -2215,7 +2418,15 @@ async function sendMessage() {
           fn => { agent.cancelStream = fn; });
         agent.cancelStream = null;
         if (result.text !== undefined) { data = result; break; }
-        if (result.aborted) { errorHandled = true; break; }
+        if (result.aborted) {
+          if (agent.srStreamBase !== null && activeTab && vfs[activeTab]?.model) {
+            vfs[activeTab].content = agent.srStreamBase;
+            vfs[activeTab].model.setValue(agent.srStreamBase);
+          }
+          agent.srStreamBase = null;
+          errorHandled = true;
+          break;
+        }
         if (!result.retryable) { sysMsg('Fehler: ' + result.error); errorHandled = true; break; }
         // retryable (timeout / 429) → try next model in chain
       }
@@ -2276,7 +2487,7 @@ async function sendMessage() {
       const activeName = activeTab ? activeTab.split('/').pop() : '';
       const activeLang = activeTab && vfs[activeTab] ? vfs[activeTab].language : '';
       const activeTabBlock = allBlocks.length === 1 && !fileBlocks.length
-        ? allBlocks[0]   // single block with language tag → treat as active-file update
+        ? allBlocks[0]   // single block with language tag → treat as active-file update (or new file if no tab open)
         : null;
       const didAutoApply = !!(srResult || fileBlocks.length || activeTabBlock);
 
@@ -2306,6 +2517,11 @@ async function sendMessage() {
         msgs.appendChild(quipDiv);
         pendingQuip = quipDiv;
       } else {
+        // Streaming may have written partial content into the active file — restore the original
+        if (!agent.streamCreatedFile && agent.srStreamBase !== null && activeTab && vfs[activeTab]?.model) {
+          vfs[activeTab].content = agent.srStreamBase;
+          vfs[activeTab].model.setValue(agent.srStreamBase);
+        }
         const botDiv = document.createElement('div');
         botDiv.className = 'chat-msg bot';
         // Wrap SEARCH/REPLACE blocks in code fences so marked.js doesn't misparse '=======' as a setext heading
@@ -2323,6 +2539,10 @@ async function sendMessage() {
       if (srResult) {
         if (!agent.srStreamApplied) {
           // Non-streaming mode: apply now
+          if (!agent.undoSnapshot && activeTab && vfs[activeTab]?.content !== undefined) {
+            agent.undoSnapshot = { path: activeTab, content: vfs[activeTab].content };
+            document.getElementById('undo-btn').classList.add('visible');
+          }
           vfs[activeTab].content = srResult.content;
           vfs[activeTab].model.setValue(srResult.content);
         }
@@ -2393,6 +2613,17 @@ async function sendMessage() {
           msgs.appendChild(botDiv);
         }
       } else if (activeTabBlock) {
+        // If no file is open but streaming already created one (language-tag fence), use that
+        if (!activeTab && agent.streamCreatedFile && vfs[agent.streamCreatedFile]) {
+          openTab(agent.streamCreatedFile); renderTree();
+        }
+        // If still no file open, infer from language tag and create now
+        if (!activeTab) {
+          const lang = activeTabBlock[1];
+          const newPath = inferFilename(lang);
+          addFile(newPath, '');
+          openTab(newPath); renderTree();
+        }
         const newCode = activeTabBlock[2].replace(/\n$/, '');
         // Guard: if the code block contains SEARCH/REPLACE markers, the model wrapped them in a
         // fence instead of outputting them bare. Try to apply as SEARCH/REPLACE first.

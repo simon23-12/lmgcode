@@ -72,8 +72,10 @@
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/model</td><td style="padding:3px 0;">Modell anzeigen / wechseln</td></tr>
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/learn</td><td style="padding:3px 0;">Lernmodus an/aus</td></tr>
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/think</td><td style="padding:3px 0;">Thinking Mode an/aus — KI plant erst, dann coden</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/mode</td><td style="padding:3px 0;">Hell-/Dunkel-Modus umschalten</td></tr>
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/run</td><td style="padding:3px 0;">Vorschau öffnen (HTML) oder Programm ausführen</td></tr>
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/enter</td><td style="padding:3px 0;">Enter-Taste drücken sendet direkt</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/undo</td><td style="padding:3px 0;">letzte KI-Änderung rückgängig machen</td></tr>
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/clear</td><td style="padding:3px 0;">Chat leeren</td></tr>
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/agent</td><td style="padding:3px 0;">neuen Agenten spawnen</td></tr>
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/add</td><td style="padding:3px 0;">neue Datei anlegen</td></tr>
@@ -115,7 +117,7 @@
     <p style="margin-bottom:24px;">LMG Code ist Open Source. Das GitHub Repository findest du hier: <a href="https://github.com/simon23-12/lmgcode" target="_blank" style="color:#0078d4;">Link</a>.<br>Bug gefunden? Sende einen Pull Request: <a href="https://github.com/simon23-12/lmgcode/pulls" target="_blank" style="color:#0078d4;">Link</a></p>
 
     <h3 style="font-size:15px;font-weight:700;color:#fff;margin-bottom:8px;">Datenschutz</h3>
-    <p style="margin-bottom:24px;">Eingaben werden an die jeweiligen Modell-Provider (Google/OpenRouter) gesendet, um die Antwort zu generieren. Bitte gebt keine privaten Daten oder Klarnamen in den Chat ein.</p>
+    <p style="margin-bottom:24px;">Eingaben werden an die jeweiligen Modell-Provider (Google/Groq/OpenRouter) gesendet, um die Antwort zu generieren. Bitte gebt keine privaten Daten oder Klarnamen in den Chat ein.</p>
 
     <h3 style="font-size:15px;font-weight:700;color:#fff;margin-bottom:12px;">Tech Stack</h3>
     <ul style="list-style:none;margin-bottom:24px;display:flex;flex-direction:column;gap:4px;">
@@ -126,11 +128,12 @@
       <li><span style="color:#858585;">Icons:</span> Font Awesome 6.5.0 via CDN</li>
       <li><span style="color:#858585;">Backend:</span> Vercel Serverless Functions (Node.js, ESM)</li>
       <li><span style="color:#858585;">Code-Execution:</span> Pyodide 0.27.0 (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby) · JDoodle API (Java)</li>
-      <li><span style="color:#858585;">AI-Modelle:</span> Sechs Modelle, User wählt im Dropdown — Standard: Gemini 3.1 Flash Lite
+      <li><span style="color:#858585;">AI-Modelle:</span> Sieben Modelle, User wählt im Dropdown — Standard: Gemini 3.1 Flash Lite
         <ul style="list-style:none;margin-top:4px;margin-left:16px;display:flex;flex-direction:column;gap:2px;">
           <li><span style="color:#4fc1ff;font-family:monospace;">gemini-3.1-flash-lite-preview</span> — Gemini 3.1 Flash Lite (Standard) via Google AI Studio</li>
           <li><span style="color:#4fc1ff;font-family:monospace;">meta-llama/llama-3.3-70b-versatile</span> — Llama 3.3 70B via Groq</li>
-          <li><span style="color:#4fc1ff;font-family:monospace;">qwen/qwen3.6-plus:free</span> — Qwen via OpenRouter</li>
+          <li><span style="color:#4fc1ff;font-family:monospace;">moonshotai/kimi-k2-instruct-0905</span> — Kimi K2 via Groq</li>
+          <li><span style="color:#4fc1ff;font-family:monospace;">qwen/qwen3-coder:free</span> — Qwen3 Coder 480B via OpenRouter</li>
           <li><span style="color:#4fc1ff;font-family:monospace;">stepfun/step-3.5-flash:free</span> — Step 3.5 Flash via OpenRouter</li>
           <li><span style="color:#4fc1ff;font-family:monospace;">nvidia/nemotron-3-super-120b-a12b:free</span> — Nemotron 3 Super via OpenRouter</li>
           <li><span style="color:#4fc1ff;font-family:monospace;">gemma-4-31b-it</span> — Gemma 4 31B via Google AI Studio</li>
