@@ -7,7 +7,7 @@ const GOOGLE_MODELS = {
 
 const MODEL_MAP = {
   qwen:             'qwen/qwen3-coder:free',
-  step:             'stepfun/step-3.5-flash:free',
+  minimax:          'minimax/minimax-m2.5:free',
   nemotron:         'nvidia/nemotron-3-super-120b-a12b:free',
   gemma:            'gemma',
   geminiflashlite:  'geminiflashlite',
