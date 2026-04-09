@@ -1885,13 +1885,13 @@ self.onmessage = async (e) => {
     inputData = new Uint8Array(msg.inputDataSAB);
     try {
       pyodide = await loadPyodide();
-      pyodide.globals.set('_jsInput', (prompt) => {
+      self._jsInput = (prompt) => {
         self.postMessage({ type: 'input_request', prompt: String(prompt ?? '') });
         Atomics.store(inputSig, 0, 0);
         Atomics.wait(inputSig, 0, 0);
         const len = Atomics.load(inputSig, 1);
         return new TextDecoder().decode(inputData.slice(0, len));
-      });
+      };
       pyodide.runPython(
         "import builtins, js\\n" +
         "builtins.input = lambda p='': js._jsInput(str(p) if p else '')"
@@ -2166,6 +2166,8 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
   }
 
   // Stream connected — only now dismiss the typing indicator
+  // Freeze the target tab at stream-start so tab switches / agent switches don't redirect chunks
+  let streamTargetTab = activeTab;
   onStreamStart();
 
   // Phase 2: if no token arrives within 60s, abort and retry next model
@@ -2175,7 +2177,6 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
   let rafPending = false;
   let gotDone = false;
   let streamUsage = null;
-
   let srNotified = false;
   function scheduleMonacoUpdate() {
     if (rafPending) return;
@@ -2184,22 +2185,24 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
     if (agent.srStreamBase === null) {
       const fenceMatch = fullText.match(/^```([\w./-]+)\n/);
       const fenceName = fenceMatch ? fenceMatch[1] : null;
-      const streamDir = activeTab && activeTab.includes('/') ? activeTab.replace(/\/[^/]+$/, '/') : '';
-      if (fenceName && fenceName.includes('.') && (!activeTab || fenceName !== activeTab.split('/').pop())) {
+      const streamDir = streamTargetTab && streamTargetTab.includes('/') ? streamTargetTab.replace(/\/[^/]+$/, '/') : '';
+      if (fenceName && fenceName.includes('.') && (!streamTargetTab || fenceName !== streamTargetTab.split('/').pop())) {
         // New file — create it immediately and switch editor to it for live streaming
         const targetPath = streamDir + fenceName;
         agent.srStreamBase = ''; // new file starts empty
         agent.streamCreatedFile = targetPath;
+        streamTargetTab = targetPath; // follow the new file
         if (!vfs[targetPath]) addFile(targetPath, '');
         openTab(targetPath);
         renderTree();
-      } else if (activeTab && vfs[activeTab]?.model) {
-        agent.srStreamBase = vfs[activeTab].model.getValue();
-      } else if (!activeTab && fenceName && !fenceName.includes('.')) {
+      } else if (streamTargetTab && vfs[streamTargetTab]?.model) {
+        agent.srStreamBase = vfs[streamTargetTab].model.getValue();
+      } else if (!streamTargetTab && fenceName && !fenceName.includes('.')) {
         // Language tag (e.g. ```html) with no file open — infer a filename and create the file
         const targetPath = inferFilename(fenceName);
         agent.srStreamBase = '';
         agent.streamCreatedFile = targetPath;
+        streamTargetTab = targetPath; // follow the new file
         if (!vfs[targetPath]) addFile(targetPath, '');
         openTab(targetPath);
         renderTree();
@@ -2208,8 +2211,8 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
       }
     }
 
-    if (!activeTab || !vfs[activeTab]?.model) return;
-    const targetPath = activeTab; // capture now — stream-end may change activeTab before RAF fires
+    if (!streamTargetTab || !vfs[streamTargetTab]?.model) return;
+    const targetPath = streamTargetTab;
     rafPending = true;
     requestAnimationFrame(() => {
       rafPending = false;
@@ -2459,6 +2462,7 @@ async function sendMessage() {
       }
     } catch (err) {
       networkError = true;
+      console.error('[fetchStream error]', err);
     }
     clearInterval(phraseInterval); clearInterval(timerInterval); typingDiv.remove();
     durationMs = Date.now() - t0;
@@ -2496,7 +2500,7 @@ async function sendMessage() {
   }
 
   if (networkError) {
-    sysMsg('Netzwerkfehler – bitte erneut versuchen.');
+    sysMsg('Netzwerkfehler – bitte erneut versuchen. (Details in der Browser-Konsole)');
   } else if (!data && !errorHandled) {
     sysMsg('Fehler: Alle Modelle nicht erreichbar.');
   } else if (data) {
