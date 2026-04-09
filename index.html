@@ -418,7 +418,7 @@
           <i class="fa-solid fa-robot"></i>
           <select id="model-select" title="Modell wählen">
             <option value="qwen">Qwen3 Coder 480B</option>
-            <option value="step">Step 3.5 Flash</option>
+            <option value="minimax">MiniMax M2.5</option>
             <option value="nemotron">Nemotron 3 Super</option>
             <option value="gemma">Gemma 4 31B</option>
             <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
@@ -1482,7 +1482,7 @@ function sysMsg(text) {
 // ── Slash Commands ─────────────────────────────────────────────────────────
 const SLASH_MODEL_NAMES = {
   qwen:           'Qwen3 Coder 480B',
-  step:           'Step 3.5 Flash',
+  minimax:        'MiniMax M2.5',
   nemotron:       'Nemotron 3 Super',
   gemma:          'Gemma 4 31B',
   geminiflashlite:'Gemini 3.1 Flash Lite',
@@ -1507,10 +1507,10 @@ function handleSlashCommand(text, agent) {
     sysMsgHtml(
       `Aktuelles Modell: <b>${currentName}</b><br>` +
       `<span style="opacity:.65;font-size:11px">` +
-      `1&nbsp;Qwen&nbsp;&nbsp;2&nbsp;Step&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;Lite` +
+      `1&nbsp;Qwen&nbsp;&nbsp;2&nbsp;MiniMax&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;Lite` +
       `&nbsp;&nbsp;<kbd style="opacity:.5">Esc</kbd>&nbsp;=&nbsp;abbrechen</span>`
     );
-    const KEYS = { '1':'qwen', '2':'step', '3':'nemotron', '4':'gemma', '5':'geminiflashlite', '6':'llama' };
+    const KEYS = { '1':'qwen', '2':'minimax', '3':'nemotron', '4':'gemma', '5':'geminiflashlite', '6':'llama' };
     const handler = (e) => {
       if (KEYS[e.key]) {
         e.preventDefault();
@@ -1626,6 +1626,32 @@ function handleSlashCommand(text, agent) {
     return true;
   }
 
+  if (cmd === 'sanity') {
+    const pane = activePane();
+    const d = document.createElement('div');
+    d.className = 'chat-msg system';
+    d.textContent = 'Prüfe Modelle…';
+    pane.appendChild(d);
+    scrollMsgs();
+    (async () => {
+      try {
+        const r = await fetch('/api/sanity');
+        const { results } = await r.json();
+        const lines = results.map(m => {
+          if (m.status === 'online')        return `<span style="color:#4ade80">✓</span> ${m.name}: <b>Online</b> <span style="opacity:.5;font-size:10px">${m.ms}ms</span>`;
+          if (m.status === 'timeout')       return `<span style="color:#fb923c">⏱</span> ${m.name}: <b>Timeout</b>`;
+          if (m.status === 'rate-limited')  return `<span style="color:#4ade80">✓</span> ${m.name}: <b>Online</b> <span style="opacity:.5;font-size:10px">gedrosselt</span>`;
+          return `<span style="color:#f87171">✗</span> ${m.name}: <b>Offline</b>`;
+        });
+        d.innerHTML = `<b>Modell-Status</b><br><span style="font-size:11px;line-height:2">${lines.join('<br>')}</span>`;
+      } catch (e) {
+        d.textContent = 'Sanity-Check fehlgeschlagen: ' + e.message;
+      }
+      scrollMsgs();
+    })();
+    return true;
+  }
+
   if (cmd === 'help') {
     sysMsgHtml(
       `<b>Slash-Befehle:</b><br>` +
@@ -1643,7 +1669,8 @@ function handleSlashCommand(text, agent) {
       `<b>/delete</b> — aktuelle Datei löschen<br>` +
       `<b>/open</b> — Ordner öffnen<br>` +
       `<b>/save</b> — aktuelle Datei herunterladen<br>` +
-      `<b>/saveall</b> — alle Dateien als ZIP</span>`
+      `<b>/saveall</b> — alle Dateien als ZIP<br>` +
+      `<b>/sanity</b> — alle Modelle auf Verfügbarkeit prüfen</span>`
     );
     return true;
   }
@@ -2252,13 +2279,13 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
 }
 
 const FALLBACK_CHAINS = {
-  qwen:             ['qwen', 'geminiflashlite', 'step', 'nemotron', 'gemma'],
-  step:             ['step', 'nemotron', 'qwen', 'gemma'],
-  nemotron:         ['nemotron', 'step', 'qwen', 'gemma'],
-  gemma:            ['gemma', 'geminiflashlite', 'qwen', 'step', 'nemotron'],
-  geminiflashlite:  ['geminiflashlite', 'qwen', 'step', 'nemotron', 'llama'],
-  llama:            ['llama', 'geminiflashlite', 'qwen', 'step', 'nemotron', 'gemma'],
-  kimi:             ['kimi', 'step', 'geminiflashlite', 'qwen'],
+  qwen:             ['qwen', 'geminiflashlite', 'minimax', 'nemotron', 'gemma'],
+  minimax:          ['minimax', 'nemotron', 'qwen', 'gemma'],
+  nemotron:         ['nemotron', 'minimax', 'qwen', 'gemma'],
+  gemma:            ['gemma', 'geminiflashlite', 'qwen', 'minimax', 'nemotron'],
+  geminiflashlite:  ['geminiflashlite', 'qwen', 'minimax', 'nemotron', 'llama'],
+  llama:            ['llama', 'geminiflashlite', 'qwen', 'minimax', 'nemotron', 'gemma'],
+  kimi:             ['kimi', 'minimax', 'geminiflashlite', 'qwen'],
 };
 
 async function sendMessage() {
@@ -2365,7 +2392,7 @@ async function sendMessage() {
 
   // Think → Code: For slow-thinking models on complex prompts, first fetch a plan (no code),
   // then pass it to the coding request. This splits thinking + coding across two 60s windows.
-  const planModels = new Set(['qwen', 'step', 'nemotron']);
+  const planModels = new Set(['qwen', 'minimax', 'nemotron']);
   let plan = null;
   if (planModels.has(selectedModel) && (agent.thinkMode || text.length > 200)) {
     typingTimer.textContent = 'Analysiert Aufgabe…';
