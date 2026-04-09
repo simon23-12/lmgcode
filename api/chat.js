@@ -6,12 +6,13 @@ const GOOGLE_MODELS = {
 };
 
 const MODEL_MAP = {
-  qwen:             'qwen/qwen3.6-plus:free',
+  qwen:             'qwen/qwen3-coder:free',
   step:             'stepfun/step-3.5-flash:free',
   nemotron:         'nvidia/nemotron-3-super-120b-a12b:free',
   gemma:            'gemma',
   geminiflashlite:  'geminiflashlite',
   llama:            'llama-3.3-70b-versatile',
+  kimi:             'moonshotai/kimi-k2-instruct-0905',
 };
 
 function isGoogleModel(target) {
@@ -19,7 +20,7 @@ function isGoogleModel(target) {
 }
 
 function isGroqModel(target) {
-  return target === 'llama-3.3-70b-versatile';
+  return target === 'llama-3.3-70b-versatile' || target === 'moonshotai/kimi-k2-instruct-0905';
 }
 
 export default async function handler(req, res) {
@@ -138,7 +139,8 @@ async function streamGoogleAI(prompt, googleModel, res) {
     const msg = err.message?.toLowerCase() || '';
     const retryable =
       err.status === 429 || err.status === 503 ||
-      msg.includes('429') || msg.includes('503') || msg.includes('rate limit') || msg.includes('overload');
+      msg.includes('429') || msg.includes('503') || msg.includes('rate limit') || msg.includes('overload') ||
+      msg.includes('quota') || msg.includes('resource_exhausted');
     const e = new Error(err.message || 'Google AI Fehler.');
     if (!retryable) e.fatal = true;
     throw e;
@@ -293,7 +295,8 @@ async function tryGoogleAI(prompt, googleModel) {
     const msg = err.message?.toLowerCase() || '';
     const retryable =
       err.status === 429 || err.status === 503 ||
-      msg.includes('429') || msg.includes('503') || msg.includes('rate limit') || msg.includes('overload');
+      msg.includes('429') || msg.includes('503') || msg.includes('rate limit') || msg.includes('overload') ||
+      msg.includes('quota') || msg.includes('resource_exhausted');
     if (!retryable) {
       const fatal = new Error(err.message || 'Google AI Fehler.');
       fatal.fatal = true;
