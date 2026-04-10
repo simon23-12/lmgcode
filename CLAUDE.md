@@ -153,6 +153,11 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 
 **JDoodle:** `language: 'java'`, `versionIndex: '4'`. Free-Tier: 200 Credits/Tag (Stand April 2026, tatsächlich ~22 Ausführungen/Tag erfahrungsgemäß). Response-Felder: `output` (kombiniertes stdout+stderr), `statusCode` (Exit-Code).
 
+**Verworfene Java-Alternativen:**
+- **Piston API** (emkc.org): Im Februar 2026 eingestellt — nicht mehr verfügbar.
+- **Wandbox**: Funktioniert nicht für Java — deshalb ist Java nicht in `api/run.js` (`COMPILER_MAP`) eingetragen.
+- **Judge0** (self-hosted): Zu komplex aufzusetzen, benötigt Docker-fähigen Server. Oracle Cloud unzugänglich, fly.io nur 7 Tage kostenlos.
+
 ## Frugal Coding Rules
 
 - Single-file Frontend — kein Build-Step, kein Bundler
@@ -170,6 +175,25 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 ## System-Prompt Philosophie
 
 Der Assistent **schreibt Code wenn gewünscht** — er ist kein Lehrer der nur Hinweise gibt. Er erklärt kurz was der Code macht, hält Erklärungen aber knapp. Antwortet in der Sprache des Schülers (DE/EN).
+
+## Lokale Entwicklung (vercel dev)
+
+Simuliert die Vercel-Umgebung lokal — API-Funktionen laufen identisch zu Produktion, kein echter Deploy.
+
+```bash
+cd "/Users/sim/Documents/LMG Code"
+
+# Einmalig (oder nach Änderungen an Env-Vars auf Vercel):
+vercel env pull .env.local
+
+# Dev-Server starten:
+vercel dev
+# → http://localhost:3000
+```
+
+- `api/node_modules` muss lokal installiert sein: `cd api && npm install`
+- `.env.local` enthält alle API-Keys — nicht committen (steht in .gitignore)
+- Seite neu laden reicht für HTML/JS-Änderungen — kein Restart nötig
 
 ## Deployment
 

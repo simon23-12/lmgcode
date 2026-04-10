@@ -477,9 +477,10 @@
 <script>
 // ── 1. State ─────────────────────────────────────────────────────────────────
 const vfs      = {};   // { path: { content, language, model } }
-let openTabs   = [];
-let activeTab  = null;
-let editor     = null;
+let openTabs      = [];
+let activeTab     = null;
+let editor        = null;
+let aiCheckFixes  = new Map(); // key: "line:col" → fix string
 let liveMode   = true;
 let dirHandle  = null;  // File System Access API handle (wenn Ordner via showDirectoryPicker geöffnet)
 
@@ -906,6 +907,41 @@ function initMonaco() {
   // No auto-open — user starts by creating a file or uploading
 
   initResizers();
+
+  // Quick-Fix provider for /check markers
+  const CHECK_LANGS = ['java','python','javascript','typescript','c','cpp','csharp','ruby','html','css','plaintext'];
+  CHECK_LANGS.forEach(lang => {
+    monaco.languages.registerCodeActionProvider(lang, {
+      provideCodeActions(model, _range, context) {
+        const actions = [];
+        for (const marker of context.markers) {
+          const fix = aiCheckFixes.get(`${marker.startLineNumber}:${marker.startColumn}`);
+          if (!fix) continue;
+          actions.push({
+            title: `Korrektur: "${fix}"`,
+            kind: 'quickfix',
+            isPreferred: true,
+            edit: {
+              edits: [{
+                resource: model.uri,
+                versionId: model.getVersionId(),
+                textEdit: {
+                  range: {
+                    startLineNumber: marker.startLineNumber,
+                    startColumn:     marker.startColumn,
+                    endLineNumber:   marker.endLineNumber,
+                    endColumn:       marker.endColumn,
+                  },
+                  text: fix,
+                },
+              }],
+            },
+          });
+        }
+        return { actions, dispose: () => {} };
+      },
+    });
+  });
 }
 
 // ── 6. File Upload & Save ─────────────────────────────────────────────────────
@@ -1670,8 +1706,99 @@ function handleSlashCommand(text, agent) {
       `<b>/open</b> — Ordner öffnen<br>` +
       `<b>/save</b> — aktuelle Datei herunterladen<br>` +
       `<b>/saveall</b> — alle Dateien als ZIP<br>` +
-      `<b>/sanity</b> — alle Modelle auf Verfügbarkeit prüfen</span>`
+      `<b>/sanity</b> — alle Modelle auf Verfügbarkeit prüfen<br>` +
+      `<b>/check</b> — aktuelle Datei auf Fehler prüfen (rote Unterstreichungen)<br>` +
+      `<b>/uncheck</b> — Fehlermarkierungen entfernen</span>`
     );
+    return true;
+  }
+
+  if (cmd === 'check') {
+    if (!activeTab || !vfs[activeTab]) { sysMsg('Keine Datei geöffnet.'); return true; }
+    const file = vfs[activeTab];
+    if (!file.model) { sysMsg('Datei nicht im Editor geöffnet.'); return true; }
+
+    const content  = file.model.getValue();
+    const filename = activeTab.split('/').pop();
+    const pane     = activePane();
+
+    const d = document.createElement('div');
+    d.className = 'chat-msg system';
+    d.textContent = `Prüfe ${filename}…`;
+    pane.appendChild(d);
+    scrollMsgs();
+
+    const numbered = content.split('\n').map((ln, i) => `${i + 1}: ${ln}`).join('\n');
+    const prompt =
+      `Du bist ein Code-Linter. Analysiere den folgenden Code auf Syntaxfehler, Tippfehler und offensichtliche Logikfehler.\n\n` +
+      `Antworte NUR mit einem JSON-Array — kein Markdown, keine Erklärung außen herum:\n` +
+      `[{ "line": <Zeilennummer>, "col": <Startspalte>, "endCol": <Endspalte>, "message": "<kurze Fehlermeldung>", "severity": "error" | "warning", "fix": "<korrekter Ersatztext oder null>" }]\n\n` +
+      `"fix" ist der exakte Text, der den unterstrichenen Bereich ersetzen soll (z.B. "static" wenn "staticc" falsch ist). null wenn kein automatischer Fix möglich.\n\n` +
+      `Wenn keine Fehler: antworte mit []\n\n` +
+      `Datei: ${filename}\n\n${numbered}`;
+
+    (async () => {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 55000);
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, model: agents.get(activeAgentId).model }),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        // Strip optional markdown code fences the model might add anyway
+        const raw = (data.text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        let markers = [];
+        try { markers = JSON.parse(raw); if (!Array.isArray(markers)) markers = []; }
+        catch { throw new Error('Modell hat kein gültiges JSON geliefert'); }
+
+        aiCheckFixes.clear();
+        markers.forEach(m => {
+          if (m.fix) aiCheckFixes.set(`${m.line}:${m.col ?? 1}`, m.fix);
+        });
+
+        monaco.editor.setModelMarkers(file.model, 'ai-check', markers.map(m => ({
+          startLineNumber: m.line,
+          startColumn:     m.col    ?? 1,
+          endLineNumber:   m.line,
+          endColumn:       m.endCol ?? 999,
+          message:         m.message,
+          severity:        m.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error,
+          source:          'AI Check',
+        })));
+
+        if (markers.length === 0) {
+          d.textContent = `✓ ${filename} — keine Fehler gefunden.`;
+        } else {
+          const errs  = markers.filter(m => m.severity !== 'warning').length;
+          const warns = markers.filter(m => m.severity === 'warning').length;
+          const parts = [];
+          if (errs)  parts.push(`${errs} Fehler`);
+          if (warns) parts.push(`${warns} Warnung${warns > 1 ? 'en' : ''}`);
+          d.textContent = `${filename} — ${parts.join(', ')} gefunden. Fahre mit der Maus über die Markierungen.`;
+        }
+      } catch (e) {
+        monaco.editor.setModelMarkers(file.model, 'ai-check', []);
+        d.textContent = `Fehler beim Prüfen: ${e.message}`;
+      }
+      scrollMsgs();
+    })();
+    return true;
+  }
+
+  if (cmd === 'uncheck') {
+    if (activeTab && vfs[activeTab]?.model) {
+      monaco.editor.setModelMarkers(vfs[activeTab].model, 'ai-check', []);
+      sysMsg('Markierungen entfernt.');
+    } else {
+      sysMsg('Keine Datei geöffnet.');
+    }
     return true;
   }
 
