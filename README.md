@@ -9,9 +9,8 @@
 ```
 
 **Type:** HTML, JS, CSS  
-**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–10) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
-**URL:** https://lmgcode.vercel.app  
-**Vercel-Projekt:** simons-projects-56ea3d55/lmgcode
+**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–10) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / Codex im Browser.  
+
 
 ## Dateistruktur
 
