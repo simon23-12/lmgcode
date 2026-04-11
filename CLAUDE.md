@@ -1,7 +1,7 @@
 # LMG Code
 
 **Type:** HTML, JS, CSS  
-**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–10) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
+**Purpose:** Browser-basierter Coding-Assistent für Informatikschüler (Klassen 5–13) am Leibniz-Montessori-Gymnasium Düsseldorf — ähnlich wie Claude Code / VS Code im Browser.  
 **URL:** https://lmgcode.vercel.app  
 **Vercel-Projekt:** simons-projects-56ea3d55/lmgcode
 
@@ -15,7 +15,7 @@ LMG Code/
 ├── api/
 │   ├── chat.js           # Vercel Serverless → OpenRouter + Google AI Studio (ESM)
 │   ├── run.js            # Code-Execution via Wandbox (C, C++, C#, TypeScript, Ruby)
-│   ├── jdoodle.js        # Java-Execution via JDoodle API
+│   ├── jdoodle.js        # Java/Go/Rust/Haskell-Execution via onlinecompiler.io
 │   ├── teavm-proxy.js    # (veraltet, nicht mehr genutzt)
 │   └── package.json      # { "@google/generative-ai": "^0.21.0" }
 └── Logo LMG Code.jpg     # App-Logo (wird im Header angezeigt)
@@ -37,8 +37,8 @@ LMG Code/
   - **Step 3.5 Flash**: `stepfun/step-3.5-flash:free` via OpenRouter
   - **Nemotron 3 Super**: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
   - **Gemma 4 31B**: `gemma-4-31b-it` via Google AI Studio (`@google/generative-ai` SDK)
-- **Code-Execution:** Pyodide (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby) · JDoodle API (Java, 22 Ausführungen/Tag)
-- **Environment Variables:** `OPENROUTER_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `JDOODLE_CLIENT_ID`, `JDOODLE_CLIENT_SECRET`
+- **Code-Execution:** Pyodide (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby, Swift) · onlinecompiler.io (Java, Go, Rust, Haskell)
+- **Environment Variables:** `OPENROUTER_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `ONLINECOMPILER_API_KEY`
 
 ## Layout
 
@@ -147,16 +147,19 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 | Sprache | Endpoint | Mechanismus |
 |---|---|---|
 | Python | — (Browser) | Pyodide 0.27.0 (WASM) |
-| C, C++, C#, TypeScript, Ruby | `api/run.js` | Wandbox API |
-| Java | `api/jdoodle.js` | JDoodle REST API (`POST https://api.jdoodle.com/v1/execute`) |
+| C, C++, C#, TypeScript, Ruby, Swift | `api/run.js` | Wandbox API |
+| Java, Go, Rust, Haskell | `api/jdoodle.js` | onlinecompiler.io REST API (`POST https://api.onlinecompiler.io/api/run-code-sync/`) |
 | HTML/CSS/JS | — (Browser) | Live-Vorschau im iframe |
 
-**JDoodle:** `language: 'java'`, `versionIndex: '4'`. Free-Tier: 200 Credits/Tag (Stand April 2026, tatsächlich ~22 Ausführungen/Tag erfahrungsgemäß). Response-Felder: `output` (kombiniertes stdout+stderr), `statusCode` (Exit-Code).
+**onlinecompiler.io:** Empfängt `{ compiler, code }`, Auth via `Authorization: <key>` (kein Bearer-Prefix). Free-Tier: 1 Mio Requests/Monat. Compiler-IDs: `openjdk-25` (Java), `go-1.26` (Go), `rust-1.93` (Rust), `haskell-9.12` (Haskell). Response-Felder: `output`, `stderr`, `exitCode`. Output truncated at 999 Zeichen.
 
-**Verworfene Java-Alternativen:**
+**Swift:** Läuft über Wandbox (`swift-6.0.1`), aber der Wandbox-Container ist derzeit defekt (catatonit-Fehler). Swift ist eingebaut, funktioniert aber nicht zuverlässig — Xcode-Ökosystem fehlt ohnehin für sinnvolle Nutzung.
+
+**Verworfene Alternativen:**
+- **JDoodle**: Ersetzt durch onlinecompiler.io — JDoodle hatte nur ~22 Ausführungen/Tag effektiv.
 - **Piston API** (emkc.org): Im Februar 2026 eingestellt — nicht mehr verfügbar.
-- **Wandbox**: Funktioniert nicht für Java — deshalb ist Java nicht in `api/run.js` (`COMPILER_MAP`) eingetragen.
-- **Judge0** (self-hosted): Zu komplex aufzusetzen, benötigt Docker-fähigen Server. Oracle Cloud unzugänglich, fly.io nur 7 Tage kostenlos.
+- **Wandbox für Java**: Funktioniert nicht für Java.
+- **Judge0** (self-hosted): Zu komplex, benötigt Docker-fähigen Server.
 
 ## Frugal Coding Rules
 
