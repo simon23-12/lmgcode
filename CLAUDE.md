@@ -189,7 +189,7 @@ vercel env pull .env.local
 # Dev-Server starten:
 vercel dev
 # → http://localhost:3000
-```
+Crtl+C: Dev Modus stoppen
 
 - `api/node_modules` muss lokal installiert sein: `cd api && npm install`
 - `.env.local` enthält alle API-Keys — nicht committen (steht in .gitignore)

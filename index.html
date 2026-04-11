@@ -424,6 +424,7 @@
             <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
             <option value="llama">Llama 3.3 70B</option>
             <option value="kimi">Kimi K2</option>
+            <option value="gptoss">GPT-OSS 120B</option>
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -483,6 +484,7 @@ let editor        = null;
 let aiCheckFixes  = new Map(); // key: "line:col" → fix string
 let liveMode   = true;
 let dirHandle  = null;  // File System Access API handle (wenn Ordner via showDirectoryPicker geöffnet)
+let awaitingGitUrl = false; // true = nächste Chat-Eingabe wird als GitHub-URL behandelt
 
 // ── Multi-Agent State ─────────────────────────────────────────────────────────
 const agents = new Map();
@@ -1524,10 +1526,146 @@ const SLASH_MODEL_NAMES = {
   geminiflashlite:'Gemini 3.1 Flash Lite',
   llama:          'Llama 3.3 70B',
   kimi:           'Kimi K2',
+  gptoss:         'GPT-OSS 120B',
 };
+
+// ── GitHub Import ─────────────────────────────────────────────────────────────
+const GIT_TEXT_EXTENSIONS = new Set([
+  'js','mjs','cjs','ts','tsx','jsx','html','htm','css','scss','sass','less',
+  'json','jsonc','yaml','yml','toml','xml','svg','md','markdown','txt','csv',
+  'py','pyw','java','kt','kts','c','cpp','cc','cxx','h','hpp','cs','go',
+  'rb','rs','php','swift','sh','bash','zsh','fish','bat','cmd','ps1',
+  'r','rmd','ipynb','sql','prisma','graphql','gql','env','gitignore',
+  'dockerfile','makefile','cmake','gradle','properties','ini','cfg','conf',
+  'vue','svelte','astro','liquid','ejs','pug','handlebars','hbs',
+  'lock','editorconfig','prettierrc','eslintrc','babelrc','browserslistrc',
+]);
+
+function parseGithubUrl(raw) {
+  // Accepts: https://github.com/owner/repo  or  github.com/owner/repo
+  //          https://github.com/owner/repo/tree/branch/optional/path
+  const clean = raw.trim().replace(/^https?:\/\//, '').replace(/^github\.com\//, '');
+  const parts = clean.split('/');
+  if (parts.length < 2) return null;
+  const owner  = parts[0];
+  const repo   = parts[1].replace(/\.git$/, '');
+  let   branch = 'main';
+  let   prefix = '';          // optional subfolder filter
+  if (parts[2] === 'tree' && parts[3]) {
+    branch = parts[3];
+    if (parts.length > 4) prefix = parts.slice(4).join('/');
+  }
+  return { owner, repo, branch, prefix };
+}
+
+async function importGithubRepo(rawUrl) {
+  const parsed = parseGithubUrl(rawUrl);
+  if (!parsed) {
+    sysMsg('Ungültige GitHub-URL. Beispiel: github.com/owner/repo');
+    return;
+  }
+  const { owner, repo, branch, prefix } = parsed;
+  const label = prefix ? `${owner}/${repo}/${prefix}` : `${owner}/${repo}`;
+
+  const statusEl = document.createElement('div');
+  statusEl.className = 'chat-msg system';
+  statusEl.textContent = `Lade Dateiliste von ${label}…`;
+  activePane().appendChild(statusEl);
+  scrollMsgs();
+
+  // 1. Fetch tree (recursive)
+  let treeItems;
+  try {
+    const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
+    const r = await fetch(treeUrl);
+    if (r.status === 404) {
+      // Maybe default branch is "master"
+      if (branch === 'main') {
+        const r2 = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/master?recursive=1`);
+        if (!r2.ok) throw new Error(`Repo nicht gefunden (${r2.status})`);
+        treeItems = (await r2.json()).tree;
+        parsed.branch = 'master';
+      } else {
+        throw new Error(`Branch "${branch}" nicht gefunden`);
+      }
+    } else if (!r.ok) {
+      const msg = r.status === 403 ? 'Rate-Limit erreicht — bitte kurz warten' : `GitHub-Fehler ${r.status}`;
+      throw new Error(msg);
+    } else {
+      treeItems = (await r.json()).tree;
+    }
+  } catch (e) {
+    statusEl.textContent = `Fehler: ${e.message}`;
+    return;
+  }
+
+  // 2. Filter to text blobs (optionally under prefix)
+  const blobs = treeItems.filter(item => {
+    if (item.type !== 'blob') return false;
+    if (prefix && !item.path.startsWith(prefix + '/') && item.path !== prefix) return false;
+    const ext = item.path.split('.').pop().toLowerCase();
+    const basename = item.path.split('/').pop().toLowerCase();
+    // No extension but known filename (Dockerfile, Makefile…)
+    if (!item.path.includes('.')) return GIT_TEXT_EXTENSIONS.has(basename);
+    return GIT_TEXT_EXTENSIONS.has(ext);
+  });
+
+  if (!blobs.length) {
+    statusEl.textContent = `Keine Textdateien gefunden in ${label}.`;
+    return;
+  }
+
+  const MAX_FILES = 80;
+  const filesToFetch = blobs.slice(0, MAX_FILES);
+  const skipped = blobs.length - filesToFetch.length;
+  statusEl.textContent = `Importiere ${filesToFetch.length} Datei(en)…${skipped > 0 ? ` (${skipped} übersprungen, Max. ${MAX_FILES})` : ''}`;
+
+  // 3. Fetch file contents in parallel (batches of 10)
+  const usedBranch = parsed.branch;
+  const rawBase = `https://raw.githubusercontent.com/${owner}/${repo}/${usedBranch}/`;
+  let imported = 0;
+  const BATCH = 10;
+  for (let i = 0; i < filesToFetch.length; i += BATCH) {
+    const batch = filesToFetch.slice(i, i + BATCH);
+    await Promise.all(batch.map(async item => {
+      try {
+        const res = await fetch(rawBase + item.path);
+        if (!res.ok) return;
+        const text = await res.text();
+        // Strip prefix from path so files land at root of vfs
+        const vfsPath = prefix ? item.path.slice(prefix.length + 1) : item.path;
+        addFile(vfsPath, text);
+        imported++;
+      } catch (_) { /* skip unreadable files */ }
+    }));
+    statusEl.textContent = `Importiere… ${Math.min(i + BATCH, filesToFetch.length)}/${filesToFetch.length}`;
+    scrollMsgs();
+  }
+
+  renderTree();
+  // Open first file automatically
+  const firstPath = prefix
+    ? filesToFetch[0]?.path.slice(prefix.length + 1)
+    : filesToFetch[0]?.path;
+  if (firstPath && vfs[firstPath]) openTab(firstPath);
+
+  statusEl.textContent = `✓ ${imported} Datei(en) aus ${label} importiert.${skipped > 0 ? ` (${skipped} nicht geladen)` : ''}`;
+  scrollMsgs();
+}
 
 function handleSlashCommand(text, agent) {
   const cmd = text.slice(1).trim().toLowerCase().split(/\s+/)[0];
+
+  if (cmd === 'git') {
+    awaitingGitUrl = true;
+    sysMsgHtml(
+      `GitHub-URL eingeben und senden:<br>` +
+      `<span style="opacity:.6;font-size:11px">z.B. <code>github.com/owner/repo</code> · ` +
+      `<code>github.com/owner/repo/tree/main/src</code><br>` +
+      `<kbd style="opacity:.5">Esc</kbd> = abbrechen</span>`
+    );
+    return true;
+  }
 
   if (cmd === 'learn') {
     agent.learnMode = !agent.learnMode;
@@ -1708,7 +1846,8 @@ function handleSlashCommand(text, agent) {
       `<b>/saveall</b> — alle Dateien als ZIP<br>` +
       `<b>/sanity</b> — alle Modelle auf Verfügbarkeit prüfen<br>` +
       `<b>/check</b> — aktuelle Datei auf Fehler prüfen (rote Unterstreichungen)<br>` +
-      `<b>/uncheck</b> — Fehlermarkierungen entfernen</span>`
+      `<b>/uncheck</b> — Fehlermarkierungen entfernen<br>` +
+      `<b>/git</b> — GitHub-Repo in den Dateibaum importieren</span>`
     );
     return true;
   }
@@ -1952,6 +2091,10 @@ const PISTON_LANGS = {
   cs:   { language: 'csharp',     version: '*' },
   ts:   { language: 'typescript', version: '*' },
   rb:   { language: 'ruby',       version: '*' },
+  go:    { language: 'go',         version: '*' },
+  rs:    { language: 'rust',       version: '*' },
+  hs:    { language: 'haskell',    version: '*' },
+  swift: { language: 'swift',      version: '*' },
 };
 
 function getRunLang(path) {
@@ -2129,15 +2272,15 @@ async function runPython(code, out) {
   });
 }
 
-// ── Java (JDoodle API) ────────────────────────────────────────────────────────
-async function runJava(code, out) {
-  out.innerHTML = `<span class="ro-info">Kompiliere und führe aus (java)…</span>\n`;
+// ── onlinecompiler.io (Java, Go, Rust, Haskell) ──────────────────────────────
+async function runOnlineCompiler(language, code, out) {
+  out.innerHTML = `<span class="ro-info">Kompiliere und führe aus (${language})…</span>\n`;
   let res, data;
   try {
     res = await fetch('/api/jdoodle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, language }),
     });
     data = await res.json();
   } catch (e) {
@@ -2168,8 +2311,8 @@ async function runCode() {
   // Python → Pyodide (im Browser, kein API-Call)
   if (lang.language === 'python') { await runPython(code, out); return; }
 
-  // Java → TeaVM (im Browser, kein API-Call)
-  if (lang.language === 'java') { await runJava(code, out); return; }
+  // Java, Go, Rust, Haskell → onlinecompiler.io
+  if (['java','go','rust','haskell'].includes(lang.language)) { await runOnlineCompiler(lang.language, code, out); return; }
 
   // Alle anderen → Wandbox via /api/run
   out.innerHTML = `<span class="ro-info">Ausführen (${lang.language})…</span>\n`;
@@ -2201,7 +2344,8 @@ document.getElementById('run-btn').onclick = toggleRunOutput;
 function inferFilename(lang) {
   const map = { html: 'index.html', css: 'style.css', js: 'script.js', javascript: 'script.js',
                 python: 'main.py', py: 'main.py', java: 'Main.java', c: 'main.c',
-                cpp: 'main.cpp', cs: 'main.cs', ts: 'main.ts', typescript: 'main.ts', ruby: 'main.rb' };
+                cpp: 'main.cpp', cs: 'main.cs', ts: 'main.ts', typescript: 'main.ts', ruby: 'main.rb',
+                go: 'main.go', rust: 'main.rs', haskell: 'main.hs', swift: 'main.swift' };
   return map[lang?.toLowerCase()] || (lang ? lang + '.txt' : 'output.txt');
 }
 
@@ -2416,6 +2560,7 @@ const FALLBACK_CHAINS = {
   geminiflashlite:  ['geminiflashlite', 'qwen', 'minimax', 'nemotron', 'llama'],
   llama:            ['llama', 'geminiflashlite', 'qwen', 'minimax', 'nemotron', 'gemma'],
   kimi:             ['kimi', 'minimax', 'geminiflashlite', 'qwen'],
+  gptoss:           ['gptoss', 'geminiflashlite', 'kimi', 'qwen'],
 };
 
 async function sendMessage() {
@@ -2423,6 +2568,21 @@ async function sendMessage() {
   const text  = input.value.trim();
   const agent = agents.get(activeAgentId);
   if (!text || agent.isTyping) return;
+
+  // GitHub URL intercept
+  if (awaitingGitUrl) {
+    awaitingGitUrl = false;
+    input.value = '';
+    input.style.height = 'auto';
+    document.getElementById('char-counter').textContent = `0/${input.maxLength}`;
+    if (text.toLowerCase() !== 'esc' && text !== '') {
+      await importGithubRepo(text);
+    } else {
+      sysMsg('Abgebrochen.');
+    }
+    return;
+  }
+
   agent.srStreamBase    = null;
   agent.srStreamApplied = false;
   agent.streamCreatedFile = null;
@@ -2856,6 +3016,7 @@ function applyEnterMode(sends) {
 applyEnterMode(localStorage.getItem('slashEnterSends') === 'true');
 
 chatInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && awaitingGitUrl) { awaitingGitUrl = false; sysMsg('Abgebrochen.'); return; }
   if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(); return; }
   if (e.key === 'Enter' && !e.shiftKey && chatInput._enterSends) { e.preventDefault(); sendMessage(); return; }
   if (chatInputManualHeight === null) {

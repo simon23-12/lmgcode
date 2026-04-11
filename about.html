@@ -86,6 +86,7 @@
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/sanity</td><td style="padding:3px 0;">Status der Modelle prüfen</td></tr>
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/check</td><td style="padding:3px 0;">aktuelle Datei auf Fehler prüfen — rote Unterstreichungen + KI-Korrekturvorschläge</td></tr>
         <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/uncheck</td><td style="padding:3px 0;">Fehlermarkierungen entfernen</td></tr>
+        <tr><td style="padding:3px 12px 3px 0;color:#4fc1ff;font-family:monospace;">/git</td><td style="padding:3px 0;">GitHub-Repo in den Dateibaum importieren</td></tr>
       </tbody>
     </table>
 
@@ -111,7 +112,11 @@
         <tr><td style="padding:3px 16px 3px 0;">C#</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.cs</td><td style="padding:3px 0;">Wandbox (Mono)</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">TypeScript</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.ts</td><td style="padding:3px 0;">Wandbox</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">Ruby</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.rb</td><td style="padding:3px 0;">Wandbox</td></tr>
-        <tr><td style="padding:3px 16px 3px 0;">Java</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.java</td><td style="padding:3px 0;">JDoodle API (22 Ausführungen/Tag)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">Java</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.java</td><td style="padding:3px 0;">onlinecompiler.io (OpenJDK 25)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">Go</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.go</td><td style="padding:3px 0;">onlinecompiler.io (Go 1.26)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">Rust</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.rs</td><td style="padding:3px 0;">onlinecompiler.io (Rust 1.93)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">Haskell</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.hs</td><td style="padding:3px 0;">onlinecompiler.io (GHC 9.12)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">Swift</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.swift</td><td style="padding:3px 0;">Wandbox (Swift 6.0.1)</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">HTML/CSS/JS</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.html</td><td style="padding:3px 0;">Vorschau (im Browser, Live-Rendering)</td></tr>
       </tbody>
     </table>
@@ -130,12 +135,13 @@
       <li><span style="color:#858585;">Markdown-Rendering:</span> marked.js 12.0.0 via CDN (nur Bot-Antworten)</li>
       <li><span style="color:#858585;">Icons:</span> Font Awesome 6.5.0 via CDN</li>
       <li><span style="color:#858585;">Backend:</span> Vercel Serverless Functions (Node.js, ESM)</li>
-      <li><span style="color:#858585;">Code-Execution:</span> Pyodide 0.27.0 (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby) · JDoodle API (Java)</li>
+      <li><span style="color:#858585;">Code-Execution:</span> Pyodide 0.27.0 (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby, Swift) · onlinecompiler.io (Java, Go, Rust, Haskell)</li>
       <li><span style="color:#858585;">AI-Modelle:</span> Sieben Modelle, User wählt im Dropdown — Standard: Gemini 3.1 Flash Lite
         <ul style="list-style:none;margin-top:4px;margin-left:16px;display:flex;flex-direction:column;gap:2px;">
           <li><span style="color:#4fc1ff;font-family:monospace;">gemini-3.1-flash-lite-preview</span> — Gemini 3.1 Flash Lite (Standard) via Google AI Studio</li>
           <li><span style="color:#4fc1ff;font-family:monospace;">meta-llama/llama-3.3-70b-versatile</span> — Llama 3.3 70B via Groq</li>
           <li><span style="color:#4fc1ff;font-family:monospace;">moonshotai/kimi-k2-instruct-0905</span> — Kimi K2 via Groq</li>
+          <li><span style="color:#4fc1ff;font-family:monospace;">openai/gpt-oss-120b</span> — GPT-OSS 120B via Groq</li>
           <li><span style="color:#4fc1ff;font-family:monospace;">qwen/qwen3-coder:free</span> — Qwen3 Coder 480B via OpenRouter</li>
           <li><span style="color:#4fc1ff;font-family:monospace;">minimax/minimax-m2.5:free</span> — MiniMax M2.5 via OpenRouter</li>
           <li><span style="color:#4fc1ff;font-family:monospace;">nvidia/nemotron-3-super-120b-a12b:free</span> — Nemotron 3 Super via OpenRouter</li>
