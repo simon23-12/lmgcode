@@ -425,6 +425,7 @@
             <option value="llama">Llama 3.3 70B</option>
             <option value="kimi">Kimi K2</option>
             <option value="gptoss">GPT-OSS 120B</option>
+            <option value="gemini25flash">Gemini 2.5 Flash ⚡</option>
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -1328,7 +1329,15 @@ Regeln:
 - Beantworte NUR Fragen zu Programmierung und Informatik
 - Antworte in der Sprache des Schülers (Deutsch oder Englisch)
 - Verwende immer Markdown-Codeblöcke — und schreibe dabei immer den **Dateinamen** als Bezeichner (z.B. \`\`\`index.html, \`\`\`Main.java, \`\`\`README.md) — NICHT die Sprache (\`\`\`html, \`\`\`java, \`\`\`markdown)
-- Beginne NIEMALS mit "Verstanden", "Ich baue jetzt", "Natürlich" oder ähnlichen Einleitungen — starte direkt mit der Antwort${quipInstruction}${learnExtra}`;
+- Beginne NIEMALS mit "Verstanden", "Ich baue jetzt", "Natürlich" oder ähnlichen Einleitungen — starte direkt mit der Antwort${quipInstruction}${learnExtra}
+
+QUALITÄTSSTANDARD für Projekte (Spiele, Apps, Websites):
+- Liefere IMMER eine vollständige, visuell ansprechende Implementierung — niemals das Minimum
+- HTML/CSS/JS-Projekte: Nutze moderne CSS (Gradients, Schatten, Transitions, Animationen), ansprechende Farbpaletten, saubere Typografie und responsives Layout
+- Spiele: Canvas mit requestAnimationFrame, flüssige Animationen, Score-Anzeige, Game-States (Menü/Spiel/Game-Over mit Restart), Partikeleffekte wo passend, Tastatur- UND Touch-Steuerung
+- Websites/Apps: Professionelles UI mit Hover-Effekten, Loading-States, sinnvollen Defaults und mobilem Support
+- NIEMALS ein weißes Div mit schwarzem Rechteck als "Spiel" ausgeben — Farben, Sprites/Grafiken, Hintergrund-Gradients und visueller Polish sind Pflicht
+- Ziel: Der Schüler soll stolz auf das Ergebnis sein und es Freunden zeigen können`;
 
   if (hasFiles) {
     const label = openTabs.length > 0 ? 'geöffnete Tabs' : 'alle Projektdateien';
@@ -1527,6 +1536,7 @@ const SLASH_MODEL_NAMES = {
   llama:          'Llama 3.3 70B',
   kimi:           'Kimi K2',
   gptoss:         'GPT-OSS 120B',
+  gemini25flash:  'Gemini 2.5 Flash',
 };
 
 // ── GitHub Import ─────────────────────────────────────────────────────────────
@@ -2561,6 +2571,7 @@ const FALLBACK_CHAINS = {
   llama:            ['llama', 'geminiflashlite', 'qwen', 'minimax', 'nemotron', 'gemma'],
   kimi:             ['kimi', 'minimax', 'geminiflashlite', 'qwen'],
   gptoss:           ['gptoss', 'geminiflashlite', 'kimi', 'qwen'],
+  gemini25flash:    ['gemini25flash'],
 };
 
 async function sendMessage() {
@@ -2800,7 +2811,28 @@ async function sendMessage() {
       const allBlocks = !srResult ? [...data.text.matchAll(/```([\w./-]*)\n([\s\S]*?)```/g)] : [];
       const dir = activeTab && activeTab.includes('/') ? activeTab.replace(/\/[^/]+$/, '/') : '';
       // A block is a "file block" if its fence identifier contains a dot (= filename)
-      const fileBlocks = allBlocks.filter(m => m[1].includes('.'));
+      let fileBlocks = allBlocks.filter(m => m[1].includes('.'));
+      // Fallback: if no file blocks but multiple language-tagged blocks, infer filenames
+      // (models often use ```html instead of ```index.html despite instructions)
+      if (!fileBlocks.length && allBlocks.length > 1) {
+        const inferred = allBlocks.map(m => {
+          const fn = inferFilename(m[1]);
+          return fn && !fn.endsWith('.txt') ? [m[0], fn, m[2], m[3]] : null;
+        }).filter(Boolean);
+        // Only use inferred blocks if we got filenames for all of them (no ambiguous .txt fallbacks)
+        if (inferred.length === allBlocks.length) fileBlocks = inferred;
+      }
+      // Also try extracting filenames from text before code blocks (e.g. "**index.html**\n```html")
+      if (!fileBlocks.length && allBlocks.length > 1) {
+        const inferred = allBlocks.map(m => {
+          const pos = data.text.lastIndexOf(m[0]);
+          if (pos <= 0) return null;
+          const before = data.text.slice(Math.max(0, pos - 120), pos);
+          const fnMatch = before.match(/(?:\*\*|`)([a-zA-Z0-9_-]+\.[a-zA-Z0-9]+)(?:\*\*|`)\s*$/);
+          return fnMatch ? [m[0], fnMatch[1], m[2], m[3]] : null;
+        }).filter(Boolean);
+        if (inferred.length === allBlocks.length) fileBlocks = inferred;
+      }
       // A block targets the active tab if its fence matches the active file's name or language
       const activeName = activeTab ? activeTab.split('/').pop() : '';
       const activeLang = activeTab && vfs[activeTab] ? vfs[activeTab].language : '';
