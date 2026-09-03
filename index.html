@@ -2462,6 +2462,64 @@ function reportSRFailures(res) {
   sysMsgHtml(`⚠ ${res.count} von ${res.blocks} Blöcken angewendet — nicht gefunden:<br>${liste}`);
 }
 
+// Klammern in String-Literalen dürfen beim Zählen nicht mitzählen.
+const ohneStrings = l => l.replace(/'(\\.|[^'\\])*'|"(\\.|[^"\\])*"|`(\\.|[^`\\])*`/g, "''");
+
+// Verankert ein Fragment ("body { … }") im vorhandenen Code: erste Zeile als Anker
+// suchen, per Klammerzählung den zugehörigen Block finden, ersetzen. Deckt CSS-Regeln
+// und Funktionen ab — der Normalfall, wenn ein Modell statt SEARCH/REPLACE einfach
+// nur den geänderten Ausschnitt schickt.
+function anchorFragment(content, fragment) {
+  const fragLines = fragment.split('\n');
+  const firstIdx = fragLines.findIndex(l => l.trim() !== '');
+  if (firstIdx === -1) return null;
+  const anchor = fragLines[firstIdx].trim();
+  if (!anchor.endsWith('{')) return null;                 // nur Blöcke sind eindeutig genug
+
+  const roh = fragment.split('\n').map(ohneStrings).join('\n');
+  const auf = (roh.match(/\{/g) || []).length, zu = (roh.match(/\}/g) || []).length;
+  if (!auf || auf !== zu) return null;                    // Fragment muss in sich geschlossen sein
+
+  const lines = content.split('\n');
+  const treffer = [];
+  for (let i = 0; i < lines.length; i++) if (lines[i].trim() === anchor) treffer.push(i);
+  if (treffer.length !== 1) return null;                  // mehrdeutig → lieber nicht raten
+
+  const start = treffer[0];
+  let tiefe = 0, ende = -1;
+  for (let i = start; i < lines.length && ende === -1; i++) {
+    for (const ch of ohneStrings(lines[i])) {
+      if (ch === '{') tiefe++;
+      else if (ch === '}' && --tiefe === 0) { ende = i; break; }
+    }
+  }
+  if (ende === -1) return null;
+
+  const indent = (lines[start].match(/^[ \t]*/) || [''])[0];
+  const neu = fragLines.slice(firstIdx).map((l, i) => (i === 0 ? indent + l.trim() : l));
+  lines.splice(start, ende - start + 1, ...neu);
+  return { content: lines.join('\n'), added: neu.length, removed: ende - start + 1 };
+}
+
+function applyFragments(content, fragments) {
+  let result = content, applied = 0, added = 0, removed = 0;
+  const failed = [];
+  for (const f of fragments) {
+    const hit = anchorFragment(result, f);
+    if (hit) { result = hit.content; added += hit.added; removed += hit.removed; applied++; }
+    else failed.push((f.split('\n').find(l => l.trim()) || '').trim().slice(0, 60));
+  }
+  return applied > 0 ? { content: result, count: applied, blocks: fragments.length, added, removed, failed } : null;
+}
+
+// Entfernt Zeilen, die nur aus Konfliktmarker-Zeichen (plus optionalem Wort) bestehen —
+// aber nur am Anfang und Ende, damit echter Code in der Mitte unangetastet bleibt.
+function strippeRandmarker(text) {
+  return text
+    .replace(/^(?:[^\S\n]*[<>=]{4,10}[^\n]*(?:\n|$))+/, '')
+    .replace(/(?:\n[^\S\n]*[<>=]{4,10}[^\n]*)+$/, '');
+}
+
 function applySearchReplace(text, currentContent) {
   const norm = text
     .replace(/\r\n/g, '\n')
@@ -2478,8 +2536,10 @@ function applySearchReplace(text, currentContent) {
   let match;
   while ((match = blockPattern.exec(norm)) !== null) {
     blocks++;
-    const search  = match[1].replace(/\n$/, '');
-    const replace = match[2].replace(/\n$/, '');
+    // Modelle erfinden gern Zusatzmarker ("<<<<<<< END" vor dem =======).
+    // Marker-artige Zeilen an den Rändern beider Abschnitte entfernen.
+    const search  = strippeRandmarker(match[1].replace(/\n$/, ''));
+    const replace = strippeRandmarker(match[2].replace(/\n$/, ''));
     const hit = applyOneBlock(result, search, replace);
     if (hit) {
       result = hit.content;
@@ -2878,13 +2938,20 @@ async function sendMessage() {
       const activeTabBlock = allBlocks.length === 1 && !fileBlocks.length
         ? allBlocks[0]   // single block with language tag → treat as active-file update (or new file if no tab open)
         : null;
-      const didAutoApply = !!(srResult || fileBlocks.length || activeTabBlock);
+      // Fragment-Fallback: Modelle schicken statt SEARCH/REPLACE gern nur den
+      // geänderten Ausschnitt ("body { … }"). Solche Blöcke im vorhandenen Code
+      // verankern, statt die Antwort ungenutzt im Chat liegen zu lassen.
+      const fragBase = srBase ?? (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
+      const fragResult = (!srResult && !fileBlocks.length && allBlocks.length && fragBase)
+        ? applyFragments(fragBase, allBlocks.map(m => m[2].replace(/\n$/, '')))
+        : null;
+      const didAutoApply = !!(srResult || fileBlocks.length || fragResult || activeTabBlock);
 
       let pendingQuip = null;
       if (didAutoApply && !agent.learnMode) {
         const newFileNames = fileBlocks.map(m => m[1]);
         const fname = newFileNames.length ? newFileNames.join(', ') : (activeTab || 'Datei');
-        const action = srResult ? 'angepasst' : newFileNames.length ? 'angelegt' : 'erstellt';
+        const action = (srResult || fragResult) ? 'angepasst' : newFileNames.length ? 'angelegt' : 'erstellt';
         const doneMessages = newFileNames.length ? [
           `${fname} angelegt.`,
           `Fertig — ${fname} ist neu im Dateibaum.`,
@@ -3013,6 +3080,15 @@ async function sendMessage() {
           botDiv.innerHTML = marked.parse(safeText);
           msgs.appendChild(botDiv);
         }
+      } else if (fragResult) {
+        if (!agent.undoSnapshot && activeTab && vfs[activeTab]?.content !== undefined) {
+          agent.undoSnapshot = { path: activeTab, content: fragBase };
+          document.getElementById('undo-btn').classList.add('visible');
+        }
+        vfs[activeTab].content = fragResult.content;
+        vfs[activeTab].model.setValue(fragResult.content);
+        sysMsgHtml(`✓ ${fragResult.count} Block/Blöcke in ${activeTab} eingesetzt &nbsp;<span style="color:#4caf50">+${fragResult.added}</span> <span style="color:#f44336">−${fragResult.removed}</span>`);
+        reportSRFailures(fragResult);
       } else if (activeTabBlock) {
         // If no file is open but streaming already created one (language-tag fence), use that
         if (!activeTab && agent.streamCreatedFile && vfs[agent.streamCreatedFile]) {
