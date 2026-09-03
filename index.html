@@ -2491,6 +2491,38 @@ function neubauHinweis(text, agent) {
   sysMsgHtml('Tipp: Für größere Neubauten liefern <b>MiniMax M3</b>, <b>Gemini 3.6 Flash</b> oder der <b>Free Models Router</b> deutlich mehr — oben im Dropdown wählbar. Für kleine Änderungen ist das aktuelle Modell schneller.');
 }
 
+// Fehler aus einem SSE-Payload vereinheitlichen. Unser Backend schickt
+// { error: "text", retryable: bool }. OpenRouter schiebt mitten im Stream sein
+// EIGENES Objekt nach: { error: { message, code } } — ohne retryable-Feld.
+// Ohne Normalisierung landet daraus ein "[object Object]" im Chat, und weil
+// retryable dann false ist, bricht die Fallback-Kette ab, statt das nächste
+// Modell zu versuchen.
+const RETRYABLE_MUSTER = /rate.?limit|quota|per-?day|overload|unavailable|high demand|timeout|temporarily|try again|capacity|congest|\b(429|500|502|503|504)\b/i;
+
+function normalisiereStreamFehler(parsed) {
+  const e = parsed.error;
+  const text = (typeof e === 'string' ? e : (e?.message || e?.error?.message || e?.error)) || 'Unbekannter Fehler.';
+  const code = Number(e?.code ?? e?.status ?? parsed.code ?? 0);
+  const retryable = typeof parsed.retryable === 'boolean'
+    ? parsed.retryable
+    : [429, 500, 502, 503, 504].includes(code) || RETRYABLE_MUSTER.test(String(text));
+  return { error: String(text), retryable };
+}
+
+// Technische Fehlermeldungen in etwas übersetzen, womit ein Schüler etwas anfangen kann.
+function freundlicherFehler(text) {
+  const t = String(text ?? '');
+  if (/free-models-per-day|per-?day/i.test(t))
+    return 'Das Tageslimit der kostenlosen OpenRouter-Modelle ist erreicht. Wähle oben im Dropdown <b>Gemini</b> oder <b>Gemma</b> — die haben ein eigenes Kontingent.';
+  if (/high demand|overload|unavailable|capacity/i.test(t))
+    return 'Das Modell ist gerade überlastet. Gleich nochmal versuchen oder oben ein anderes Modell wählen.';
+  if (/rate.?limit|quota/i.test(t))
+    return 'Zu viele Anfragen in kurzer Zeit. Kurz warten oder oben ein anderes Modell wählen.';
+  if (/context|token.*limit|too long/i.test(t))
+    return 'Das Projekt ist zu groß für dieses Modell. Schließe ein paar Tabs oder wähle ein Modell mit mehr Kontext.';
+  return t || 'Unbekannter Fehler.';
+}
+
 // Zieht den Fließtext aus einer Modellantwort — alles außer Codeblöcken und
 // SEARCH/REPLACE-Blöcken. Daraus wird die Rückmeldung im Chat, statt einen
 // vorgefertigten Satz zu würfeln.
@@ -2734,7 +2766,7 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
         if (payload === '[DONE]') { gotDone = true; break outer; }
         try {
           const parsed = JSON.parse(payload);
-          if (parsed.error) return { error: parsed.error, retryable: !!parsed.retryable };
+          if (parsed.error) return normalisiereStreamFehler(parsed);
           if (parsed.usage) streamUsage = parsed.usage;
           const delta = parsed.choices?.[0]?.delta?.content ?? '';
           if (delta) {
@@ -2895,7 +2927,7 @@ async function sendMessage() {
 
   neubauHinweis(text, agent);
   const builtPrompt = buildPrompt(text, agent, plan);
-  let data = null, networkError = false, errorHandled = false, durationMs = 0;
+  let data = null, networkError = false, errorHandled = false, durationMs = 0, letzterFehler = null;
 
   if (liveMode) {
     // ── Streaming path with fallback chain ────────────────────────────────────
@@ -2941,7 +2973,10 @@ async function sendMessage() {
           errorHandled = true;
           break;
         }
-        if (!result.retryable) { sysMsg('Fehler: ' + result.error); errorHandled = true; break; }
+        // Jeden Fehlschlag merken, damit am Ende der Kette der letzte echte Grund
+        // genannt werden kann statt nur "nicht erreichbar".
+        if (result.error) letzterFehler = result.error;
+        if (!result.retryable) { sysMsgHtml(freundlicherFehler(result.error)); errorHandled = true; break; }
         // retryable (timeout / 429) → try next model in chain
       }
     } catch (err) {
@@ -2966,6 +3001,7 @@ async function sendMessage() {
         clearTimeout(timer);
         data = await res.json();
         if (res.ok && !data.error) break;      // success
+        if (data.error) letzterFehler = data.error;
         if (!data.retryable) break;            // fatal error, stop
         data = null;                           // retryable → try next model
       } catch (err) {
@@ -2977,7 +3013,7 @@ async function sendMessage() {
     durationMs = Date.now() - t0;
     clearInterval(phraseInterval); clearInterval(timerInterval); typingDiv.remove();
     if (data && (data.error || !res?.ok)) {
-      sysMsg('Fehler: ' + (data?.error || 'Alle Modelle nicht erreichbar.'));
+      sysMsgHtml(freundlicherFehler(data?.error) || 'Alle Modelle nicht erreichbar.');
       errorHandled = true;
       data = null;
     }
@@ -2986,7 +3022,10 @@ async function sendMessage() {
   if (networkError) {
     sysMsg('Netzwerkfehler – bitte erneut versuchen. (Details in der Browser-Konsole)');
   } else if (!data && !errorHandled) {
-    sysMsg('Fehler: Alle Modelle nicht erreichbar.');
+    // Kette komplett durchlaufen — den letzten echten Grund nennen statt nur "nicht erreichbar"
+    sysMsgHtml(typeof letzterFehler === 'string' && letzterFehler
+      ? 'Alle Modelle der Kette sind ausgefallen. ' + freundlicherFehler(letzterFehler)
+      : 'Alle Modelle nicht erreichbar — bitte gleich nochmal versuchen.');
   } else if (data) {
       // Auto-apply: SEARCH/REPLACE-Blöcke oder (fallback) genau ein Codeblock
       // Use srStreamBase if streaming already applied blocks (so stats are computed against original)
