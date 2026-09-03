@@ -107,12 +107,13 @@
       </thead>
       <tbody>
         <tr><td style="padding:3px 16px 3px 0;">Python</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.py</td><td style="padding:3px 0;">Pyodide (im Browser, kein Server)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">TigerJython</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.tj</td><td style="padding:3px 0;">Pyodide (im Browser, <code style="font-family:monospace;font-size:11px;">repeat n:</code> wird automatisch übersetzt)</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">C</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.c</td><td style="padding:3px 0;">Wandbox (gcc)</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">C++</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.cpp</td><td style="padding:3px 0;">Wandbox (gcc)</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">C#</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.cs</td><td style="padding:3px 0;">Wandbox (Mono)</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">TypeScript</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.ts</td><td style="padding:3px 0;">Wandbox</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">Ruby</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.rb</td><td style="padding:3px 0;">Wandbox</td></tr>
-        <tr><td style="padding:3px 16px 3px 0;">Java</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.java</td><td style="padding:3px 0;">onlinecompiler.io (OpenJDK 25)</td></tr>
+        <tr><td style="padding:3px 16px 3px 0;">Java / BlueJ</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.java</td><td style="padding:3px 0;">onlinecompiler.io (OpenJDK 25)</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">Go</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.go</td><td style="padding:3px 0;">onlinecompiler.io (Go 1.26)</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">Rust</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.rs</td><td style="padding:3px 0;">onlinecompiler.io (Rust 1.93)</td></tr>
         <tr><td style="padding:3px 16px 3px 0;">Haskell</td><td style="padding:3px 16px 3px 0;color:#4fc1ff;font-family:monospace;">.hs</td><td style="padding:3px 0;">onlinecompiler.io (GHC 9.12)</td></tr>
@@ -135,19 +136,21 @@
       <li><span style="color:#858585;">Markdown-Rendering:</span> marked.js 12.0.0 via CDN (nur Bot-Antworten)</li>
       <li><span style="color:#858585;">Icons:</span> Font Awesome 6.5.0 via CDN</li>
       <li><span style="color:#858585;">Backend:</span> Vercel Serverless Functions (Node.js, ESM)</li>
-      <li><span style="color:#858585;">Code-Execution:</span> Pyodide 0.27.0 (Python, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby, Swift) · onlinecompiler.io (Java, Go, Rust, Haskell)</li>
-      <li><span style="color:#858585;">AI-Modelle:</span> Sieben Modelle, User wählt im Dropdown — Standard: Gemini 3.1 Flash Lite
-        <ul style="list-style:none;margin-top:4px;margin-left:16px;display:flex;flex-direction:column;gap:2px;">
-          <li><span style="color:#4fc1ff;font-family:monospace;">gemini-3.1-flash-lite-preview</span> — Gemini 3.1 Flash Lite (Standard) via Google AI Studio</li>
-          <li><span style="color:#4fc1ff;font-family:monospace;">meta-llama/llama-3.3-70b-versatile</span> — Llama 3.3 70B via Groq</li>
-          <li><span style="color:#4fc1ff;font-family:monospace;">moonshotai/kimi-k2-instruct-0905</span> — Kimi K2 via Groq</li>
-          <li><span style="color:#4fc1ff;font-family:monospace;">openai/gpt-oss-120b</span> — GPT-OSS 120B via Groq</li>
-          <li><span style="color:#4fc1ff;font-family:monospace;">qwen/qwen3-coder:free</span> — Qwen3 Coder 480B via OpenRouter</li>
-          <li><span style="color:#4fc1ff;font-family:monospace;">minimax/minimax-m2.5:free</span> — MiniMax M2.5 via OpenRouter</li>
-          <li><span style="color:#4fc1ff;font-family:monospace;">nvidia/nemotron-3-super-120b-a12b:free</span> — Nemotron 3 Super via OpenRouter</li>
-          <li><span style="color:#4fc1ff;font-family:monospace;">gemma-4-31b-it</span> — Gemma 4 31B via Google AI Studio</li>
-        </ul>
-      </li>
+      <li><span style="color:#858585;">Code-Execution:</span> Pyodide 0.27.0 (Python + TigerJython, WASM im Browser) · Wandbox API (C, C++, C#, TypeScript, Ruby, Swift) · onlinecompiler.io (Java/BlueJ, Go, Rust, Haskell)</li>
+            <!-- models:models -->
+            <li><span style="color:#858585;">AI-Modelle:</span> Acht Modelle, User wählt im Dropdown — Standard: Gemini 3.1 Flash Lite
+              <ul style="list-style:none;margin-top:4px;margin-left:16px;display:flex;flex-direction:column;gap:2px;">
+                <li><span style="color:#4fc1ff;font-family:monospace;">gemini-3.1-flash-lite</span> — Gemini 3.1 Flash Lite (Standard) via Google AI Studio</li>
+                <li><span style="color:#4fc1ff;font-family:monospace;">cohere/north-mini-code:free</span> — North Mini Code via OpenRouter</li>
+                <li><span style="color:#4fc1ff;font-family:monospace;">minimax/minimax-m3:free</span> — MiniMax M3 via OpenRouter</li>
+                <li><span style="color:#4fc1ff;font-family:monospace;">nvidia/nemotron-3-super-120b-a12b:free</span> — Nemotron 3 Super via OpenRouter</li>
+                <li><span style="color:#4fc1ff;font-family:monospace;">gemma-4-31b-it</span> — Gemma 4 31B via Google AI Studio</li>
+                <li><span style="color:#4fc1ff;font-family:monospace;">qwen/qwen3.8-27b</span> — Qwen3.8-27B via Groq</li>
+                <li><span style="color:#4fc1ff;font-family:monospace;">openai/gpt-oss-120b</span> — GPT-OSS 120B via Groq</li>
+                <li><span style="color:#4fc1ff;font-family:monospace;">openrouter/free</span> — Free Models Router via OpenRouter</li>
+              </ul>
+            </li>
+            <!-- /models:models -->
     </ul>
 
     <p style="color:var(--text-dim);font-size:11px;">Version 1.0.426 (April 2026)</p>

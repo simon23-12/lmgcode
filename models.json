@@ -1,0 +1,81 @@
+{
+  "_hinweis": "EINZIGE QUELLE DER WAHRHEIT für alle Modelle. Nicht von Hand in index.html/api/chat.js/api/sanity.js/about.html editieren — stattdessen hier ändern und danach 'node scripts/sync-models.mjs' laufen lassen. 'node scripts/update-models.mjs' prüft die Provider-Kataloge und aktualisiert diese Datei automatisch.",
+  "defaultModel": "geminiflashlite",
+  "maxChainLength": 5,
+  "models": [
+    {
+      "key": "geminiflashlite",
+      "label": "Gemini 3.1 Flash Lite",
+      "provider": "google",
+      "id": "gemini-3.1-flash-lite",
+      "rank": 1,
+      "hotkey": "5",
+      "plan": false
+    },
+    {
+      "key": "north",
+      "label": "North Mini Code",
+      "provider": "openrouter",
+      "id": "cohere/north-mini-code:free",
+      "rank": 2,
+      "hotkey": "1",
+      "plan": true
+    },
+    {
+      "key": "minimax",
+      "label": "MiniMax M3",
+      "provider": "openrouter",
+      "id": "minimax/minimax-m3:free",
+      "rank": 3,
+      "hotkey": "2",
+      "plan": true
+    },
+    {
+      "key": "nemotron",
+      "label": "Nemotron 3 Super",
+      "provider": "openrouter",
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "rank": 4,
+      "hotkey": "3",
+      "plan": true
+    },
+    {
+      "key": "gemma",
+      "label": "Gemma 4 31B",
+      "provider": "google",
+      "id": "gemma-4-31b-it",
+      "rank": 5,
+      "hotkey": "4",
+      "plan": false
+    },
+    {
+      "key": "qwen",
+      "label": "Qwen3.8-27B",
+      "provider": "groq",
+      "id": "qwen/qwen3.8-27b",
+      "rank": 6,
+      "hotkey": "6",
+      "plan": false
+    },
+    {
+      "key": "gptoss",
+      "label": "GPT-OSS 120B",
+      "provider": "groq",
+      "id": "openai/gpt-oss-120b",
+      "rank": 7,
+      "plan": false
+    },
+    {
+      "key": "free",
+      "label": "Free Models Router",
+      "provider": "openrouter",
+      "id": "openrouter/free",
+      "rank": 8,
+      "plan": false,
+      "fallback": false,
+      "chain": [
+        "free"
+      ]
+    }
+  ]
+}

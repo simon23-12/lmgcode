@@ -1,27 +1,32 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// <models:maps>
+// AUTO-GENERIERT aus models.json — nicht von Hand ändern (node scripts/sync-models.mjs)
 const GOOGLE_MODELS = {
+  geminiflashlite: "gemini-3.1-flash-lite",
   gemma:           "gemma-4-31b-it",
-  geminiflashlite: "gemini-3.1-flash-lite-preview",
 };
 
+// Sentinel bei Google-Modellen: der Key selbst (echte ID steht in GOOGLE_MODELS).
 const MODEL_MAP = {
-  qwen:             'qwen/qwen3-coder:free',
-  minimax:          'minimax/minimax-m2.5:free',
-  nemotron:         'nvidia/nemotron-3-super-120b-a12b:free',
-  gemma:            'gemma',
-  geminiflashlite:  'geminiflashlite',
-  llama:            'llama-3.3-70b-versatile',
-  kimi:             'moonshotai/kimi-k2-instruct-0905',
+  geminiflashlite: 'geminiflashlite',
+  north:           'cohere/north-mini-code:free',
+  minimax:         'minimax/minimax-m3:free',
+  nemotron:        'nvidia/nemotron-3-super-120b-a12b:free',
+  gemma:           'gemma',
+  qwen:            'qwen/qwen3.8-27b',
+  gptoss:          'openai/gpt-oss-120b',
+  free:            'openrouter/free',
 };
 
-function isGoogleModel(target) {
-  return target === 'gemma' || target === 'geminiflashlite';
-}
+const GOOGLE_TARGETS = new Set(['geminiflashlite', 'gemma']);
+const GROQ_TARGETS   = new Set(['qwen/qwen3.8-27b', 'openai/gpt-oss-120b']);
 
-function isGroqModel(target) {
-  return target === 'llama-3.3-70b-versatile' || target === 'moonshotai/kimi-k2-instruct-0905';
-}
+function isGoogleModel(target) { return GOOGLE_TARGETS.has(target); }
+function isGroqModel(target)   { return GROQ_TARGETS.has(target); }
+
+const DEFAULT_MODEL = 'geminiflashlite';
+// </models:maps>
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

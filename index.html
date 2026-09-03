@@ -417,15 +417,16 @@
         <div id="chat-header-title">
           <i class="fa-solid fa-robot"></i>
           <select id="model-select" title="Modell wählen">
-            <option value="qwen">Qwen3 Coder 480B</option>
-            <option value="minimax">MiniMax M2.5</option>
+            <!-- models:dropdown -->
+            <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
+            <option value="north">North Mini Code</option>
+            <option value="minimax">MiniMax M3</option>
             <option value="nemotron">Nemotron 3 Super</option>
             <option value="gemma">Gemma 4 31B</option>
-            <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
-            <option value="llama">Llama 3.3 70B</option>
-            <option value="kimi">Kimi K2</option>
+            <option value="qwen">Qwen3.8-27B</option>
             <option value="gptoss">GPT-OSS 120B</option>
-            <option value="gemini25flash">Gemini 2.5 Flash ⚡</option>
+            <option value="free">Free Models Router</option>
+            <!-- /models:dropdown -->
           </select>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
@@ -477,6 +478,40 @@
 <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
 <script>
+// ── 0. Modelle (aus models.json generiert) ──────────────────────────────────
+// <models:maps>
+// AUTO-GENERIERT aus models.json — nicht von Hand ändern (node scripts/sync-models.mjs)
+const DEFAULT_MODEL = 'geminiflashlite';
+
+const SLASH_MODEL_NAMES = {
+  geminiflashlite: 'Gemini 3.1 Flash Lite',
+  north:           'North Mini Code',
+  minimax:         'MiniMax M3',
+  nemotron:        'Nemotron 3 Super',
+  gemma:           'Gemma 4 31B',
+  qwen:            'Qwen3.8-27B',
+  gptoss:          'GPT-OSS 120B',
+  free:            'Free Models Router',
+};
+
+const MODEL_HOTKEYS = { '1': 'north', '2': 'minimax', '3': 'nemotron', '4': 'gemma', '5': 'geminiflashlite', '6': 'qwen' };
+const MODEL_HOTKEY_HINT = '1&nbsp;North&nbsp;&nbsp;2&nbsp;MiniMax&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;&nbsp;6&nbsp;Qwen3.8-27';
+
+const FALLBACK_CHAINS = {
+  geminiflashlite: ['geminiflashlite', 'north', 'minimax', 'nemotron', 'gemma'],
+  north:           ['north', 'geminiflashlite', 'minimax', 'nemotron', 'gemma'],
+  minimax:         ['minimax', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
+  nemotron:        ['nemotron', 'geminiflashlite', 'north', 'minimax', 'gemma'],
+  gemma:           ['gemma', 'north', 'geminiflashlite', 'minimax', 'nemotron'],
+  qwen:            ['qwen', 'geminiflashlite', 'north', 'minimax', 'nemotron'],
+  gptoss:          ['gptoss', 'geminiflashlite', 'north', 'minimax', 'nemotron'],
+  free:            ['free'],
+};
+
+// Think → Code: diese Modelle bekommen bei komplexen Prompts erst eine Planungsanfrage.
+const PLAN_MODELS = new Set(['north', 'minimax', 'nemotron']);
+// </models:maps>
+
 // ── 1. State ─────────────────────────────────────────────────────────────────
 const vfs      = {};   // { path: { content, language, model } }
 let openTabs      = [];
@@ -515,7 +550,7 @@ function createAgent() {
     isTyping: false,
     cancelStream: null,
     sessionTokens: 0,
-    model: 'geminiflashlite',
+    model: DEFAULT_MODEL,
     srStreamBase: null,
     srStreamApplied: false,
     streamCreatedFile: null,
@@ -612,7 +647,8 @@ const TEXT_EXT = new Set([
   'toml','ini','cfg','conf','env','gitignore','gitattributes','editorconfig',
   'dockerfile','makefile','cmake','gradle','properties','vue','svelte','astro',
   'r','kt','kts','swift','dart','lua','pl','ex','exs','erl','hs','elm',
-  'clj','cljs','fs','fsx','ml','v','tf','hcl','prisma','graphql','gql'
+  'clj','cljs','fs','fsx','ml','v','tf','hcl','prisma','graphql','gql',
+  'tj','bluej','ctxt'
 ]);
 
 function isText(name) {
@@ -627,7 +663,8 @@ function getLang(name) {
   return ({
     js:'javascript', jsx:'javascript', mjs:'javascript', cjs:'javascript',
     ts:'typescript', tsx:'typescript',
-    py:'python', pyw:'python',
+    py:'python', pyw:'python', tj:'python',
+    bluej:'ini', ctxt:'ini',
     html:'html', htm:'html', xhtml:'html', vue:'html', svelte:'html',
     css:'css', scss:'scss', sass:'scss', less:'less',
     json:'json', json5:'json', jsonc:'json',
@@ -648,7 +685,7 @@ function fileIcon(name) {
   const ext = name.split('.').pop().toLowerCase();
   return ({
     js:'fa-solid fa-bolt', jsx:'fa-solid fa-bolt', ts:'fa-solid fa-bolt', tsx:'fa-solid fa-bolt',
-    py:'fa-brands fa-python', html:'fa-solid fa-code', htm:'fa-solid fa-code',
+    py:'fa-brands fa-python', tj:'fa-brands fa-python', html:'fa-solid fa-code', htm:'fa-solid fa-code',
     css:'fa-solid fa-paintbrush', scss:'fa-solid fa-paintbrush', sass:'fa-solid fa-paintbrush',
     json:'fa-solid fa-database', md:'fa-solid fa-file-lines',
     java:'fa-brands fa-java', php:'fa-brands fa-php', rs:'fa-solid fa-gear',
@@ -1329,15 +1366,7 @@ Regeln:
 - Beantworte NUR Fragen zu Programmierung und Informatik
 - Antworte in der Sprache des Schülers (Deutsch oder Englisch)
 - Verwende immer Markdown-Codeblöcke — und schreibe dabei immer den **Dateinamen** als Bezeichner (z.B. \`\`\`index.html, \`\`\`Main.java, \`\`\`README.md) — NICHT die Sprache (\`\`\`html, \`\`\`java, \`\`\`markdown)
-- Beginne NIEMALS mit "Verstanden", "Ich baue jetzt", "Natürlich" oder ähnlichen Einleitungen — starte direkt mit der Antwort${quipInstruction}${learnExtra}
-
-QUALITÄTSSTANDARD für Projekte (Spiele, Apps, Websites):
-- Liefere IMMER eine vollständige, visuell ansprechende Implementierung — niemals das Minimum
-- HTML/CSS/JS-Projekte: Nutze moderne CSS (Gradients, Schatten, Transitions, Animationen), ansprechende Farbpaletten, saubere Typografie und responsives Layout
-- Spiele: Canvas mit requestAnimationFrame, flüssige Animationen, Score-Anzeige, Game-States (Menü/Spiel/Game-Over mit Restart), Partikeleffekte wo passend, Tastatur- UND Touch-Steuerung
-- Websites/Apps: Professionelles UI mit Hover-Effekten, Loading-States, sinnvollen Defaults und mobilem Support
-- NIEMALS ein weißes Div mit schwarzem Rechteck als "Spiel" ausgeben — Farben, Sprites/Grafiken, Hintergrund-Gradients und visueller Polish sind Pflicht
-- Ziel: Der Schüler soll stolz auf das Ergebnis sein und es Freunden zeigen können`;
+- Beginne NIEMALS mit "Verstanden", "Ich baue jetzt", "Natürlich" oder ähnlichen Einleitungen — starte direkt mit der Antwort${quipInstruction}${learnExtra}`;
 
   if (hasFiles) {
     const label = openTabs.length > 0 ? 'geöffnete Tabs' : 'alle Projektdateien';
@@ -1527,18 +1556,6 @@ function sysMsg(text) {
 }
 
 // ── Slash Commands ─────────────────────────────────────────────────────────
-const SLASH_MODEL_NAMES = {
-  qwen:           'Qwen3 Coder 480B',
-  minimax:        'MiniMax M2.5',
-  nemotron:       'Nemotron 3 Super',
-  gemma:          'Gemma 4 31B',
-  geminiflashlite:'Gemini 3.1 Flash Lite',
-  llama:          'Llama 3.3 70B',
-  kimi:           'Kimi K2',
-  gptoss:         'GPT-OSS 120B',
-  gemini25flash:  'Gemini 2.5 Flash',
-};
-
 // ── GitHub Import ─────────────────────────────────────────────────────────────
 const GIT_TEXT_EXTENSIONS = new Set([
   'js','mjs','cjs','ts','tsx','jsx','html','htm','css','scss','sass','less',
@@ -1691,10 +1708,10 @@ function handleSlashCommand(text, agent) {
     sysMsgHtml(
       `Aktuelles Modell: <b>${currentName}</b><br>` +
       `<span style="opacity:.65;font-size:11px">` +
-      `1&nbsp;Qwen&nbsp;&nbsp;2&nbsp;MiniMax&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;Lite` +
+      MODEL_HOTKEY_HINT +
       `&nbsp;&nbsp;<kbd style="opacity:.5">Esc</kbd>&nbsp;=&nbsp;abbrechen</span>`
     );
-    const KEYS = { '1':'qwen', '2':'minimax', '3':'nemotron', '4':'gemma', '5':'geminiflashlite', '6':'llama' };
+    const KEYS = MODEL_HOTKEYS;
     const handler = (e) => {
       if (KEYS[e.key]) {
         e.preventDefault();
@@ -2095,6 +2112,7 @@ document.getElementById('preview-btn').onclick = togglePreview;
 
 const PISTON_LANGS = {
   py:   { language: 'python',     version: '*' },
+  tj:   { language: 'python',     version: '*' },
   java: { language: 'java',       version: '*' },
   c:    { language: 'c',          version: '*' },
   cpp:  { language: 'c++',        version: '*' },
@@ -2318,8 +2336,15 @@ async function runCode() {
   const code = vfs[activeTab].model ? vfs[activeTab].model.getValue() : vfs[activeTab].content;
   const filename = activeTab.split('/').pop();
 
-  // Python → Pyodide (im Browser, kein API-Call)
-  if (lang.language === 'python') { await runPython(code, out); return; }
+  // Python / TigerJython → Pyodide (im Browser, kein API-Call)
+  if (lang.language === 'python') {
+    if (activeTab.endsWith('.tj')) {
+      // TigerJython: repeat n: → for _tj_i in range(n):
+      code = code.replace(/^(\s*)repeat\s+(\S.*?)\s*:/gm, '$1for _tj_i in range($2):');
+    }
+    await runPython(code, out);
+    return;
+  }
 
   // Java, Go, Rust, Haskell → onlinecompiler.io
   if (['java','go','rust','haskell'].includes(lang.language)) { await runOnlineCompiler(lang.language, code, out); return; }
@@ -2353,7 +2378,7 @@ document.getElementById('run-btn').onclick = toggleRunOutput;
 
 function inferFilename(lang) {
   const map = { html: 'index.html', css: 'style.css', js: 'script.js', javascript: 'script.js',
-                python: 'main.py', py: 'main.py', java: 'Main.java', c: 'main.c',
+                python: 'main.py', py: 'main.py', tj: 'main.tj', java: 'Main.java', c: 'main.c',
                 cpp: 'main.cpp', cs: 'main.cs', ts: 'main.ts', typescript: 'main.ts', ruby: 'main.rb',
                 go: 'main.go', rust: 'main.rs', haskell: 'main.hs', swift: 'main.swift' };
   return map[lang?.toLowerCase()] || (lang ? lang + '.txt' : 'output.txt');
@@ -2562,18 +2587,6 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
   };
 }
 
-const FALLBACK_CHAINS = {
-  qwen:             ['qwen', 'geminiflashlite', 'minimax', 'nemotron', 'gemma'],
-  minimax:          ['minimax', 'nemotron', 'qwen', 'gemma'],
-  nemotron:         ['nemotron', 'minimax', 'qwen', 'gemma'],
-  gemma:            ['gemma', 'geminiflashlite', 'qwen', 'minimax', 'nemotron'],
-  geminiflashlite:  ['geminiflashlite', 'qwen', 'minimax', 'nemotron', 'llama'],
-  llama:            ['llama', 'geminiflashlite', 'qwen', 'minimax', 'nemotron', 'gemma'],
-  kimi:             ['kimi', 'minimax', 'geminiflashlite', 'qwen'],
-  gptoss:           ['gptoss', 'geminiflashlite', 'kimi', 'qwen'],
-  gemini25flash:    ['gemini25flash'],
-};
-
 async function sendMessage() {
   const input = document.getElementById('chat-input');
   const text  = input.value.trim();
@@ -2689,13 +2702,12 @@ async function sendMessage() {
   try {
   const selectedModel = document.getElementById('model-select').value;
   agent.model = selectedModel;
-  const chain = FALLBACK_CHAINS[selectedModel] ?? FALLBACK_CHAINS.geminiflashlite;
+  const chain = FALLBACK_CHAINS[selectedModel] ?? FALLBACK_CHAINS[DEFAULT_MODEL];
 
   // Think → Code: For slow-thinking models on complex prompts, first fetch a plan (no code),
   // then pass it to the coding request. This splits thinking + coding across two 60s windows.
-  const planModels = new Set(['qwen', 'minimax', 'nemotron']);
   let plan = null;
-  if (planModels.has(selectedModel) && (agent.thinkMode || text.length > 200)) {
+  if (PLAN_MODELS.has(selectedModel) && (agent.thinkMode || text.length > 200)) {
     typingTimer.textContent = 'Analysiert Aufgabe…';
     typingText.style.animation = 'none'; void typingText.offsetHeight; typingText.style.animation = '';
     typingText.textContent = 'Plant die Umsetzung…';
@@ -2811,28 +2823,7 @@ async function sendMessage() {
       const allBlocks = !srResult ? [...data.text.matchAll(/```([\w./-]*)\n([\s\S]*?)```/g)] : [];
       const dir = activeTab && activeTab.includes('/') ? activeTab.replace(/\/[^/]+$/, '/') : '';
       // A block is a "file block" if its fence identifier contains a dot (= filename)
-      let fileBlocks = allBlocks.filter(m => m[1].includes('.'));
-      // Fallback: if no file blocks but multiple language-tagged blocks, infer filenames
-      // (models often use ```html instead of ```index.html despite instructions)
-      if (!fileBlocks.length && allBlocks.length > 1) {
-        const inferred = allBlocks.map(m => {
-          const fn = inferFilename(m[1]);
-          return fn && !fn.endsWith('.txt') ? [m[0], fn, m[2], m[3]] : null;
-        }).filter(Boolean);
-        // Only use inferred blocks if we got filenames for all of them (no ambiguous .txt fallbacks)
-        if (inferred.length === allBlocks.length) fileBlocks = inferred;
-      }
-      // Also try extracting filenames from text before code blocks (e.g. "**index.html**\n```html")
-      if (!fileBlocks.length && allBlocks.length > 1) {
-        const inferred = allBlocks.map(m => {
-          const pos = data.text.lastIndexOf(m[0]);
-          if (pos <= 0) return null;
-          const before = data.text.slice(Math.max(0, pos - 120), pos);
-          const fnMatch = before.match(/(?:\*\*|`)([a-zA-Z0-9_-]+\.[a-zA-Z0-9]+)(?:\*\*|`)\s*$/);
-          return fnMatch ? [m[0], fnMatch[1], m[2], m[3]] : null;
-        }).filter(Boolean);
-        if (inferred.length === allBlocks.length) fileBlocks = inferred;
-      }
+      const fileBlocks = allBlocks.filter(m => m[1].includes('.'));
       // A block targets the active tab if its fence matches the active file's name or language
       const activeName = activeTab ? activeTab.split('/').pop() : '';
       const activeLang = activeTab && vfs[activeTab] ? vfs[activeTab].language : '';

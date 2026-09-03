@@ -6,15 +6,19 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const TIMEOUT_MS = 15_000;
 const PROMPT     = '1';
 
+// <models:models>
+// AUTO-GENERIERT aus models.json — nicht von Hand ändern (node scripts/sync-models.mjs)
 const MODELS = [
-  { name: 'Gemini Flash Lite', provider: 'google',     id: 'gemini-3.1-flash-lite-preview' },
-  { name: 'Gemma 4 31B',       provider: 'google',     id: 'gemma-4-31b-it' },
-  { name: 'Llama 3.3 70B',     provider: 'groq',       id: 'llama-3.3-70b-versatile' },
-  { name: 'Kimi K2',           provider: 'groq',       id: 'moonshotai/kimi-k2-instruct-0905' },
-  { name: 'Qwen3 Coder',       provider: 'openrouter', id: 'qwen/qwen3-coder:free' },
-  { name: 'MiniMax M2.5',      provider: 'openrouter', id: 'minimax/minimax-m2.5:free' },
-  { name: 'Nemotron Super',    provider: 'openrouter', id: 'nvidia/nemotron-3-super-120b-a12b:free' },
+  { name: 'Gemini 3.1 Flash Lite',  provider: 'google',      id: 'gemini-3.1-flash-lite' },
+  { name: 'North Mini Code',        provider: 'openrouter',  id: 'cohere/north-mini-code:free' },
+  { name: 'MiniMax M3',             provider: 'openrouter',  id: 'minimax/minimax-m3:free' },
+  { name: 'Nemotron 3 Super',       provider: 'openrouter',  id: 'nvidia/nemotron-3-super-120b-a12b:free' },
+  { name: 'Gemma 4 31B',            provider: 'google',      id: 'gemma-4-31b-it' },
+  { name: 'Qwen3.8-27B',            provider: 'groq',        id: 'qwen/qwen3.8-27b' },
+  { name: 'GPT-OSS 120B',           provider: 'groq',        id: 'openai/gpt-oss-120b' },
+  { name: 'Free Models Router',     provider: 'openrouter',  id: 'openrouter/free' },
 ];
+// </models:models>
 
 async function checkOpenAICompat(url, key, modelId) {
   const controller = new AbortController();

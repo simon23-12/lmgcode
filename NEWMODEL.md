@@ -1,123 +1,80 @@
-# Neues Modell hinzufügen — Checkliste
+# Modelle pflegen
 
-## 1. Modell-Key wählen
+Alle Modelle stehen in **`models.json`** — das ist die einzige Quelle der Wahrheit.
+Nichts in `index.html`, `api/chat.js`, `api/sanity.js` oder `about.html` von Hand
+anfassen: die Bereiche zwischen den `models:*`-Markern werden generiert.
 
-Kurzer interner Bezeichner, z.B. `minimax`. Wird in `FALLBACK_CHAINS`, `SLASH_MODEL_NAMES`, dem Dropdown und der API als `model`-Parameter verwendet.
+## Der Normalfall: automatisch aktualisieren
 
-## 2. Provider ermitteln
+```bash
+node scripts/update-models.mjs           # prüfen — ändert nichts
+node scripts/update-models.mjs --apply   # tote Modelle ersetzen + alles synchronisieren
+vercel --prod --yes
+```
 
-| Provider | Wie erkannt? | Was tun? |
+`update-models.mjs` lädt die Live-Kataloge von **Google AI Studio**, **Groq** und
+**OpenRouter**, vergleicht sie mit `models.json` und testet jedes eingebundene
+Modell mit einem 1-Token-Request. Der Bericht zeigt:
+
+- welche Modelle verschwunden oder tot sind
+- ob ein Preview-Modell inzwischen eine stabile Version hat
+  (`gemini-3.1-flash-lite-preview` → `gemini-3.1-flash-lite`)
+- neue freie Kandidaten je Provider (kostenlos, ≥ 128K Kontext, Text→Text)
+
+Mit `--apply` ersetzt das Skript tote Modelle selbstständig. Dabei gilt:
+
+1. Ersatz möglichst aus derselben Familie (`minimax-m2.5:free` → `minimax-m3:free`)
+2. sonst der bestbewertete freie Kandidat (Coding-Modelle und großer Kontext zählen)
+3. **jeder Kandidat wird vorher live getestet** — nur was antwortet, wird eingetragen
+4. passt der interne Key nicht mehr zum neuen Modell, wird er umbenannt
+   (`llama` → `qwen`), inklusive aller Fallback-Ketten
+5. anschließend läuft `sync-models.mjs` automatisch
+
+Weitere Schalter: `--json` (maschinenlesbar), `--no-test` (nur Katalog-Abgleich, keine Requests).
+
+## Ein Modell von Hand ändern
+
+`models.json` bearbeiten, dann:
+
+```bash
+node scripts/sync-models.mjs
+```
+
+Ein Eintrag sieht so aus:
+
+| Feld | Pflicht | Bedeutung |
 |---|---|---|
-| **OpenRouter** | Model-ID enthält `/` oder `:free` | Nur `MODEL_MAP` ergänzen — keine Funktionsänderung nötig |
-| **Groq** | Groq-Dokumentation / API | `MODEL_MAP` + `isGroqModel()` in `api/chat.js` ergänzen |
-| **Google AI Studio** | `gemini-*` oder `gemma-*` | `GOOGLE_MODELS` + `MODEL_MAP` (Sentinel-String) + `isGoogleModel()` in `api/chat.js` ergänzen |
+| `key` | ja | interner Bezeichner (`model`-Parameter der API, Dropdown-Wert) |
+| `label` | ja | Anzeigename im Dropdown, Chat und Sanity-Check |
+| `provider` | ja | `google` · `groq` · `openrouter` |
+| `id` | ja | echte Modell-ID beim Provider |
+| `rank` | ja | Reihenfolge im Dropdown **und** Priorität in den Fallback-Ketten (1 = beste) |
+| `hotkey` | nein | Ziffer für `/model` (1–6) |
+| `plan` | nein | `true` = Think→Code-Splitting (langsam denkende Modelle) |
+| `fallback` | nein | `false` = darf nicht als Fallback für andere dienen |
+| `chain` | nein | feste Fallback-Kette statt der automatisch abgeleiteten |
 
----
+Die Fallback-Ketten werden aus `rank` berechnet: erst das Modell selbst, dann die
+übrigen nach Rang — der erste Fallback kommt aber möglichst von einem **anderen
+Provider**, damit ein Provider-Ausfall nicht die ganze Kette killt. Länge über
+`maxChainLength`.
 
-## Änderungen in `api/chat.js`
+## Was wo generiert wird
 
-### Immer: `MODEL_MAP`
-```js
-const MODEL_MAP = {
-  // ...
-  minimax: 'minimax/minimax-m2.5:free',   // OpenRouter-Slug / Groq-ID
-};
-```
+| Datei | Marker | Inhalt |
+|---|---|---|
+| `api/chat.js` | `models:maps` | `GOOGLE_MODELS`, `MODEL_MAP`, `GOOGLE_TARGETS`, `GROQ_TARGETS`, `isGoogleModel`, `isGroqModel` |
+| `api/sanity.js` | `models:models` | Liste für den `/api/sanity`-Endpoint |
+| `index.html` | `models:dropdown` | die `<option>`-Einträge |
+| `index.html` | `models:maps` | `SLASH_MODEL_NAMES`, `MODEL_HOTKEYS`, `MODEL_HOTKEY_HINT`, `FALLBACK_CHAINS`, `PLAN_MODELS` |
+| `about.html` | `models:models` | Modell-Liste im Tech-Stack |
+| `CLAUDE.md` / `README.md` | `models:models`, `models:chains` | Modell-Liste + Fallback-Tabelle |
 
-### Nur bei Groq: `isGroqModel()`
-```js
-function isGroqModel(target) {
-  return target === 'llama-3.3-70b-versatile'
-      || target === 'moonshotai/kimi-k2-instruct-0905'
-      || target === 'NEUER_GROQ_MODEL_ID';  // ← ergänzen
-}
-```
+`node scripts/sync-models.mjs --check` prüft nur und endet mit Exit-Code 1, wenn
+eine Datei nicht mehr zu `models.json` passt.
 
-### Nur bei Google AI Studio: `GOOGLE_MODELS` + `isGoogleModel()`
-```js
-const GOOGLE_MODELS = {
-  gemma:           "gemma-4-31b-it",
-  geminiflashlite: "gemini-3.1-flash-lite-preview",
-  neukey:          "gemini-x-xyz",  // ← ergänzen
-};
-// MODEL_MAP: Sentinel = Key selbst (nicht die echte ID)
-const MODEL_MAP = { neukey: 'neukey', ... };
+## Neuen Provider anbinden
 
-function isGoogleModel(target) {
-  return target === 'gemma' || target === 'geminiflashlite' || target === 'neukey'; // ← ergänzen
-}
-```
-
----
-
-## Änderungen in `index.html`
-
-### 1. Dropdown (`#model-select`)
-```html
-<select id="model-select">
-  <!-- ... -->
-  <option value="minimax">MiniMax M2.5</option>   <!-- ← ergänzen -->
-</select>
-```
-
-### 2. `SLASH_MODEL_NAMES`
-```js
-const SLASH_MODEL_NAMES = {
-  // ...
-  minimax: 'MiniMax M2.5',   // ← ergänzen (Anzeigename für /model-Befehle)
-};
-```
-
-### 3. `FALLBACK_CHAINS` — zwei Stellen
-
-**a) Eigene Kette für das neue Modell:**
-```js
-const FALLBACK_CHAINS = {
-  // ...
-  minimax: ['minimax', 'geminiflashlite', 'step', 'nemotron', 'gemma'],  // ← neu
-};
-```
-
-**b) Das neue Modell in bestehende Ketten einbauen** (überall wo es als Fallback sinnvoll ist):
-```js
-geminiflashlite: ['geminiflashlite', 'minimax', 'qwen', 'step', 'nemotron', 'llama'],  // ← minimax eingefügt
-```
-
-### 4. Tastenkürzel `KEYS` (optional — nur 6 Slots: 1–6)
-```js
-const KEYS = { '1':'qwen', '2':'step', '3':'nemotron', '4':'gemma', '5':'geminiflashlite', '6':'llama' };
-// Ein bestehendes ersetzen wenn das neue Modell wichtiger ist
-```
-
-### 5. `planModels` (optional — Think→Code-Splitting)
-Wenn das Modell langsam denkt und von einer vorgeschalteten Planungsanfrage profitiert:
-```js
-const planModels = new Set(['qwen', 'step', 'nemotron', 'minimax']);  // ← ergänzen
-```
-
----
-
-## Änderungen in `about.html`
-
-```html
-<li>
-  <span style="color:#4fc1ff;font-family:monospace;">minimax/minimax-m2.5:free</span>
-  — MiniMax M2.5 via OpenRouter
-</li>
-```
-
----
-
-## Änderungen in `CLAUDE.md`
-
-- Modell-Liste unter **AI-Modelle** ergänzen
-- Fallback-Tabelle aktualisieren (neue Zeile + Einbau in bestehende Ketten)
-- OpenRouter-Modelle-Zeile ergänzen (falls OpenRouter)
-
----
-
-## Kriterien für neue Free-Modelle (OpenRouter)
-
-- Programming-Ranking auf openrouter.ai/collections/free-models
-- Kontext ≥ 128K (wegen großer Prompts mit mehreren Dateien)
-- Modell-ID auf OpenRouter verifizieren — nicht aus PDF/Beschreibung übernehmen, sondern aus dem API-Beispiel der OpenRouter-Seite ablesen (Feld `model:`)
+Nur dann ist echte Handarbeit nötig — in `scripts/lib/config.mjs` (erlaubte
+Provider), `scripts/update-models.mjs` (Katalog + Live-Test) und in `api/chat.js`
+eine `tryX`/`streamX`-Funktion analog zu Groq.

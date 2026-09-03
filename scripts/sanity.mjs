@@ -1,39 +1,17 @@
 #!/usr/bin/env node
 // Sanity-check: testet alle LMG-Code-Modelle mit einem minimalen 1-Token-Request.
-// Läuft parallel — braucht .env.local im Projekt-Root (vercel env pull .env.local).
+// Modell-Liste kommt aus models.json. Braucht .env.local im Projekt-Root.
 // Keine npm-Abhängigkeiten — nur native fetch (Node.js 18+).
 
-import { readFileSync, existsSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { loadConfig, loadEnv } from './lib/config.mjs';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const KEYS = loadEnv();
+const OPENROUTER_KEY = KEYS.openrouter;
+const GOOGLE_KEY     = KEYS.google;
+const GROQ_KEY       = KEYS.groq;
 
-// .env.local parsen
-const envPath = resolve(ROOT, '.env.local');
-if (!existsSync(envPath)) {
-  console.error('Fehler: .env.local nicht gefunden.\nBitte zuerst ausführen: vercel env pull .env.local');
-  process.exit(1);
-}
-const env = {};
-for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
-  const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
-  if (m) env[m[1]] = m[2].replace(/^"(.*)"$/, '$1');
-}
-
-const OPENROUTER_KEY = env.OPENROUTER_API_KEY;
-const GOOGLE_KEY     = env.GOOGLE_GENERATIVE_AI_API_KEY;
-const GROQ_KEY       = env.GROQ_API_KEY;
-
-const MODELS = [
-  { name: 'Gemini 3.1 Flash Lite', provider: 'google',      id: 'gemini-3.1-flash-lite-preview' },
-  { name: 'Gemma 4 31B',           provider: 'google',      id: 'gemma-4-31b-it' },
-  { name: 'Llama 3.3 70B',         provider: 'groq',        id: 'llama-3.3-70b-versatile' },
-  { name: 'Kimi K2',               provider: 'groq',        id: 'moonshotai/kimi-k2-instruct-0905' },
-  { name: 'Qwen3 Coder 480B',      provider: 'openrouter',  id: 'qwen/qwen3-coder:free' },
-  { name: 'MiniMax M2.5',           provider: 'openrouter',  id: 'minimax/minimax-m2.5:free' },
-  { name: 'Nemotron 3 Super',      provider: 'openrouter',  id: 'nvidia/nemotron-3-super-120b-a12b:free' },
-];
+// Modelle kommen aus models.json — hier nichts von Hand pflegen.
+const MODELS = loadConfig().models.map(m => ({ name: m.label, provider: m.provider, id: m.id }));
 
 const TIMEOUT_MS = 20_000;
 const PROMPT     = '1';  // kürzest möglicher Input
