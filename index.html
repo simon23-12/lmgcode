@@ -2393,54 +2393,102 @@ function extractStreamingCode(text) {
   return match ? match[2] : null;
 }
 
+// Wendet einen einzelnen SEARCH/REPLACE-Block an. Leiter von streng nach tolerant.
+function applyOneBlock(content, search, replace) {
+  const nfc = s => s.normalize('NFC');
+
+  // Leerer SEARCH-Block = reine Einfügung, nichts überschreiben.
+  if (search === '') {
+    return { content: content ? content + '\n' + replace : replace,
+             added: replace.split('\n').length, removed: 0 };
+  }
+
+  // 1. Exakter Treffer, notfalls nach Unicode-Normalisierung.
+  //    Ersetzung als Funktion, sonst wirkt ein "$&" im Code als Backreference.
+  for (const [hay, needle] of [[content, search], [nfc(content), nfc(search)]]) {
+    if (!hay.includes(needle)) continue;
+    const cut = replace === '' && hay.includes(needle + '\n') ? needle + '\n' : needle;
+    return { content: hay.replace(cut, () => replace),
+             added: replace === '' ? 0 : replace.split('\n').length,
+             removed: search.split('\n').length };
+  }
+
+  // 2. Zeilenweise: Einrückung egal, Leerzeilen in der Datei werden übersprungen.
+  const lines = content.split('\n');
+  const needleLines = search.split('\n').map(l => nfc(l.trim())).filter(l => l !== '');
+  if (!needleLines.length) return null;
+  // Eine einzelne, sehr kurze Zeile ("}" o. ä.) ist zu mehrdeutig fürs Fuzzy-Matching.
+  if (needleLines.length === 1 && needleLines[0].length < 4) return null;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (nfc(lines[i].trim()) !== needleLines[0]) continue;
+    let k = 1, j = i + 1;
+    while (k < needleLines.length && j < lines.length) {
+      const cur = nfc(lines[j].trim());
+      if (cur === '') { j++; continue; }
+      if (cur !== needleLines[k]) break;
+      k++; j++;
+    }
+    if (k !== needleLines.length) continue;
+    const indent = (lines[i].match(/^[ \t]*/) || [''])[0];
+    const repl = replace === '' ? [] : replace.split('\n').map((l, idx) =>
+      idx === 0 ? indent + l.replace(/^[ \t]*/, '') : l);
+    lines.splice(i, j - i, ...repl);
+    return { content: lines.join('\n'), added: repl.length, removed: j - i };
+  }
+  return null;
+}
+
+// Schützt davor, eine gefüllte Datei mit einer Teil-Ausgabe zu überschreiben.
+// Vergleichsbasis ist der Stand VOR dem Streaming: vfs[path].content kann beim
+// Live-Streaming bereits das Fragment enthalten und würde es mit sich selbst
+// vergleichen. Gibt null zurück, wenn das Überschreiben in Ordnung geht.
+function partialOverwriteGuard(path, newCode, agent) {
+  const vorher = (agent.srStreamBase !== null && !agent.streamCreatedFile && path === activeTab)
+               ? agent.srStreamBase
+               : (vfs[path] ? vfs[path].content : '');
+  if (!vorher || !vorher.trim()) return null;   // neue oder leere Datei — alles erlaubt
+  const oldLines = (vorher.match(/\n/g) || []).length + 1;
+  const newLines = (newCode.match(/\n/g) || []).length + 1;
+  if (newLines >= oldLines * 0.5) return null;
+  return { vorher, oldLines, newLines };
+}
+
+// Meldet SEARCH/REPLACE-Blöcke, die erkannt, aber im Code nicht gefunden wurden —
+// sonst verschwinden sie stillschweigend und der Schüler glaubt, alles sei angewendet.
+function reportSRFailures(res) {
+  if (!res || !res.failed || !res.failed.length) return;
+  const liste = res.failed.map(f => `<code>${f.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code>`).join('<br>');
+  sysMsgHtml(`⚠ ${res.count} von ${res.blocks} Blöcken angewendet — nicht gefunden:<br>${liste}`);
+}
+
 function applySearchReplace(text, currentContent) {
-  // Normalize Llama's reversed separator format: ">>>>>>>\n=======" → "======="
-  const normalizedText = text.replace(/\n>>>>>>>[^\S\n]*\r?\n(?========)/g, '\n');
-  const blockPattern = /<<<<<<< SEARCH\r?\n([\s\S]*?)\r?\n=======\r?\n([\s\S]*?)\r?\n>>>>>>> REPLACE/g;
+  const norm = text
+    .replace(/\r\n/g, '\n')
+    // Llamas verdrehtes Format: ">>>>>>>\n=======" → "======="
+    .replace(/\n>{4,10}[^\S\n]*\n(?=[^\S\n]*={4,10})/g, '\n');
+
+  // Tolerant: 4–10 Markerzeichen, beliebiger Text hinter SEARCH/REPLACE (Modelle
+  // hängen gern den Dateinamen an), Leerzeichen hinter =======, leere Abschnitte.
+  const blockPattern = /^[^\S\n]*<{4,10}[^\S\n]*SEARCH[^\n]*\n([\s\S]*?)^[^\S\n]*={4,10}[^\S\n]*\n([\s\S]*?)^[^\S\n]*>{4,10}[^\S\n]*REPLACE[^\n]*$/gm;
+
   let result = currentContent;
-  let applied = 0, added = 0, removed = 0;
+  let applied = 0, added = 0, removed = 0, blocks = 0;
+  const failed = [];
   let match;
-  while ((match = blockPattern.exec(normalizedText)) !== null) {
-    const search  = match[1];
-    const replace = match[2];
-    const normSearch = search.normalize('NFC');
-    // Normalize result to NFC for comparison if needed
-    const resultNFC = result.normalize('NFC');
-    const useNFC = !result.includes(search) && resultNFC.includes(normSearch);
-    const effectiveResult = useNFC ? resultNFC : result;
-    const effectiveSearch = useNFC ? normSearch : search;
-    if (effectiveResult.includes(effectiveSearch)) {
-      // Exact match (with optional Unicode normalization)
-      result = effectiveResult.replace(effectiveSearch, replace);
-      removed += search.split('\n').length;
-      added   += replace.split('\n').length;
-      applied++;
+  while ((match = blockPattern.exec(norm)) !== null) {
+    blocks++;
+    const search  = match[1].replace(/\n$/, '');
+    const replace = match[2].replace(/\n$/, '');
+    const hit = applyOneBlock(result, search, replace);
+    if (hit) {
+      result = hit.content;
+      added += hit.added; removed += hit.removed; applied++;
     } else {
-      // Fuzzy fallback: match line-by-line ignoring leading/trailing whitespace + Unicode normalization
-      const nfc = s => s.normalize('NFC');
-      const searchLines  = search.split('\n');
-      const resultLines  = result.split('\n');
-      const needle = searchLines.map(l => nfc(l.trim())).join('\n');
-      let found = -1, foundLen = 0;
-      for (let i = 0; i <= resultLines.length - searchLines.length; i++) {
-        const slice = resultLines.slice(i, i + searchLines.length).map(l => nfc(l.trim())).join('\n');
-        if (slice === needle) { found = i; foundLen = searchLines.length; break; }
-      }
-      if (found !== -1) {
-        // Preserve indentation of first matched line
-        const indent = (resultLines[found].match(/^(\s*)/) || ['',''])[1];
-        const replaceLines = replace.split('\n').map((l, idx) =>
-          idx === 0 ? indent + l.trimStart() : l
-        );
-        resultLines.splice(found, foundLen, ...replaceLines);
-        result = resultLines.join('\n');
-        removed += foundLen;
-        added   += replaceLines.length;
-        applied++;
-      }
+      failed.push((search.split('\n').find(l => l.trim()) || '').trim().slice(0, 60));
     }
   }
-  return applied > 0 ? { content: result, count: applied, added, removed } : null;
+  return applied > 0 ? { content: result, count: applied, added, removed, blocks, failed } : null;
 }
 
 async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, agent, registerAbort) {
@@ -2888,6 +2936,7 @@ async function sendMessage() {
           vfs[activeTab].model.setValue(srResult.content);
         }
         sysMsgHtml(`✓ ${srResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${srResult.added}</span> <span style="color:#f44336">−${srResult.removed}</span>`);
+        reportSRFailures(srResult);
       } else if (fileBlocks.length) {
         // Restore active tab only if streaming wrote into it unintentionally (not a new file we created)
         if (!agent.streamCreatedFile && agent.srStreamBase !== null && activeTab && vfs[activeTab]?.model) {
@@ -2918,6 +2967,7 @@ async function sendMessage() {
               vfs[activeTab].model.setValue(innerResult.content);
               lastPath = activeTab;
               sysMsgHtml(`✓ ${innerResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${innerResult.added}</span> <span style="color:#f44336">−${innerResult.removed}</span>`);
+              reportSRFailures(innerResult);
             } else {
               sysMsgHtml(`⚠ <b>${blk[1]}</b> — SEARCH-Text nicht gefunden (Datei evtl. zu groß für Kontext). Antwort oben anzeigen und manuell übernehmen.`);
             }
@@ -2929,6 +2979,16 @@ async function sendMessage() {
             continue;
           }
           const isActiveFile = activeTab && blk[1] === activeTab.split('/').pop();
+          const zielPfad = isActiveFile ? activeTab : newPath;
+          const teil = partialOverwriteGuard(zielPfad, newCode, agent);
+          if (teil) {
+            if (vfs[zielPfad]?.model && vfs[zielPfad].content !== teil.vorher) {
+              vfs[zielPfad].content = teil.vorher;
+              vfs[zielPfad].model.setValue(teil.vorher);
+            }
+            sysMsgHtml(`⚠ <b>${zielPfad}</b> übersprungen — Modell hat nur einen Teil ausgegeben (${teil.newLines} von ${teil.oldLines} Zeilen). Datei wurde <b>nicht</b> überschrieben.`);
+            continue;
+          }
           if (isActiveFile) {
             if (vfs[activeTab]?.model) {
               vfs[activeTab].content = newCode;
@@ -2939,7 +2999,7 @@ async function sendMessage() {
           } else {
             addFile(newPath, newCode);
             lastPath = newPath;
-            sysMsgHtml(`✓ <b>${newPath}</b> angelegt &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
+            sysMsgHtml(`✓ <b>${newPath}</b> ${vfs[newPath] ? 'aktualisiert' : 'angelegt'} &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
           }
         }
         if (lastPath) {
@@ -2980,16 +3040,23 @@ async function sendMessage() {
             vfs[activeTab].content = innerResult.content;
             vfs[activeTab].model.setValue(innerResult.content);
             sysMsgHtml(`✓ ${innerResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${innerResult.added}</span> <span style="color:#f44336">−${innerResult.removed}</span>`);
+            reportSRFailures(innerResult);
           } else {
             sysMsgHtml('⚠ Konnte nicht automatisch angewendet werden — Suche fand keine exakte Übereinstimmung.');
           }
         } else {
           const newLines = (newCode.match(/\n/g) || []).length + 1;
-          const isEmpty = !activeTab || vfs[activeTab]?.content.trim() === '';
-          const oldLines = isEmpty ? 0 : (vfs[activeTab].content.match(/\n/g) || []).length + 1;
-          // Guard: if new code is less than 50% of original, it's likely a partial — don't overwrite
-          if (!isEmpty && newLines < oldLines * 0.5) {
-            sysMsgHtml(`⚠ Modell hat nur einen Teil ausgegeben (${newLines} von ${oldLines} Zeilen) — Datei wurde <b>nicht</b> überschrieben. Bitte SEARCH/REPLACE verwenden oder Änderung manuell einfügen.`);
+          // Vergleichsbasis ist der Stand VOR dem Streaming — vfs[activeTab].content
+          // wurde beim Live-Streaming bereits überschrieben und würde das Fragment
+          // mit sich selbst vergleichen (Wächter greift dann nie).
+          const teil = activeTab ? partialOverwriteGuard(activeTab, newCode, agent) : null;
+          if (teil) {
+            // Streaming hat das Fragment schon in den Editor geschrieben — zurückrollen.
+            if (vfs[activeTab]?.model && vfs[activeTab].content !== teil.vorher) {
+              vfs[activeTab].content = teil.vorher;
+              vfs[activeTab].model.setValue(teil.vorher);
+            }
+            sysMsgHtml(`⚠ Modell hat nur einen Teil ausgegeben (${teil.newLines} von ${teil.oldLines} Zeilen) — Datei wurde <b>nicht</b> überschrieben. Bitte SEARCH/REPLACE verwenden oder Änderung manuell einfügen.`);
           } else if (activeTab && vfs[activeTab]) {
             vfs[activeTab].content = newCode;
             vfs[activeTab].model.setValue(newCode);
