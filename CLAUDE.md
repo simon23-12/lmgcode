@@ -158,7 +158,15 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 
 ### Kontingente — der eigentliche Engpass
 
-**OpenRouter `:free` (Stand 2026-09-03):** 20 Anfragen/Minute und **50 pro Tag** — für den gesamten Key, also die ganze Schule zusammen. Ein **einmaliger** Kauf von **10 $ Guthaben** hebt das auf **1.000 pro Tag** (RPM bleibt 20). Das Guthaben wird dabei nicht verbraucht: `:free`-Modelle kosten weiter $0, der Kauf ist nur der Schalter. Quelle: https://openrouter.ai/docs/api-reference/limits
+**OpenRouter `:free` (Stand 2026-09-03):** 20 Anfragen/Minute und **50 pro Tag** — pro **Account**, nicht pro Key. Zusätzliche Keys oder Accounts ändern daran nichts, OpenRouter steuert die Kapazität global.
+
+Die Schwelle für **1.000 Anfragen/Tag** sind **10 $ kumuliert gekaufte Credits (all-time)** — kein Mindestguthaben. Der Schalter bleibt umgelegt, auch wenn das Guthaben später wieder auf 0 fällt. `:free`-Modelle kosten $0 pro Token (im Katalog steht bei allen `pricing.prompt: "0"`), das Guthaben wird davon also nicht aufgezehrt.
+
+**Kontostand am 2026-09-03:** `total_credits: 5`, `total_usage: 0.77` — es sind erst **5 $ gekauft**, deshalb greift noch das 50er-Limit. Es fehlen also **5 $, nicht 10 $**; die Fehlermeldung sagt das auch wörtlich („Add 5 credits to unlock 1000 free model requests per day"). Abfragen mit: `curl -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/credits`
+
+**Was der Kauf NICHT ändert:** die 20 Anfragen/Minute. Bei 30 Schülern, die gleichzeitig auf Senden drücken, ist das weiterhin der bindende Engpass — ein Grund mehr, warum der Standard auf Google liegt. Der Tageszähler läuft um Mitternacht UTC zurück. Ungenutztes Guthaben kann OpenRouter nach einem Jahr verfallen lassen; die freigeschaltete Stufe bleibt davon unberührt.
+
+Quelle: https://openrouter.ai/docs/api-reference/limits
 
 > 50 Anfragen/Tag sind bei einem Kurs mit 30 Schülern nach zehn Minuten weg. Symptom: HTTP 429 `Rate limit exceeded: free-models-per-day`. `/sanity` in der App zeigt solche Modelle als **Tageslimit erreicht** (orange ⚠), `node scripts/sanity.mjs` als ✗ mit der Fehlermeldung. Vor jeder Fehlersuche also erst prüfen, ob es nur das Tageslimit ist — die Modelle sind nicht kaputt.
 
