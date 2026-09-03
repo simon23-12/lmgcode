@@ -1415,7 +1415,7 @@ Es gibt noch keine Datei. Wenn der Schüler etwas gebaut haben will — auch wen
 REGEL: Ein Codeblock pro Datei, mit dem Dateinamen als Bezeichner — \`\`\`index.html, \`\`\`spiel.py, \`\`\`Main.java. NIE nur die Sprache (\`\`\`html, \`\`\`python).
 - Spiele und alles Interaktive: EINE einzige \`\`\`index.html mit HTML, CSS und JS zusammen — läuft sofort in der Vorschau.
 - Vollständig und lauffähig: kein Gerüst, keine TODOs, keine "hier noch ergänzen"-Kommentare.
-- Externe Bibliotheken nur per CDN-Link, sonst nichts Installierbares.
+- Externe Bibliotheken nur per CDN-Link, und NUR von \`cdn.jsdelivr.net\`, \`cdnjs.cloudflare.com\`, \`unpkg.com\` oder \`esm.sh\` — andere Hosts blockiert die Vorschau.
 - Ausführbar sind hier: HTML/CSS/JS im Browser, Python/TigerJython, Java, C, C++, C#, Go, Rust, Haskell, Ruby, TypeScript, Swift.
 
 ABSCHLUSS: Schreibe nach dem Code genau EINEN kurzen Satz (max. 15 Wörter) in der Sprache des Schülers — was du gebaut hast. Keine Einleitung, keine Aufzählung.`;
@@ -2094,8 +2094,36 @@ function buildPreviewHtml() {
     return `<script${otherAttrs ? ' ' + otherAttrs : ''}>${vfs[resolved].content}<\/script>`;
   });
 
-  return html;
+  return LOCALSTORAGE_SHIM + html;
 }
+
+// Das Vorschau-iframe läuft ohne allow-same-origin und hat damit einen
+// undurchsichtigen Origin — jeder Zugriff auf localStorage wirft dort einen
+// SecurityError. Ein Spiel, das seinen Highscore speichert, stirbt also an
+// einer Wand, die der Schüler nicht sehen kann. Deshalb ein Ersatz im
+// Arbeitsspeicher: gleiche API, hält nur bis zum Neuladen der Vorschau.
+const LOCALSTORAGE_SHIM = `<script>
+(function () {
+  function erreichbar(name) { try { window[name].getItem('__t'); return true; } catch (e) { return false; } }
+  function ersatz() {
+    let d = {};
+    return {
+      getItem: k => (Object.prototype.hasOwnProperty.call(d, String(k)) ? d[String(k)] : null),
+      setItem: (k, v) => { d[String(k)] = String(v); },
+      removeItem: k => { delete d[String(k)]; },
+      clear: () => { d = {}; },
+      key: i => Object.keys(d)[i] ?? null,
+      get length() { return Object.keys(d).length; },
+    };
+  }
+  for (const name of ['localStorage', 'sessionStorage']) {
+    if (!erreichbar(name)) {
+      try { Object.defineProperty(window, name, { value: ersatz(), configurable: true }); } catch (e) {}
+    }
+  }
+})();
+<\/script>
+`;
 
 function togglePreview() {
   const frame = document.getElementById('preview-frame');

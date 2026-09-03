@@ -213,6 +213,15 @@ Gemessen mit dem echten App-Prompt und dem Schul-Key, mehrere Läufe je Modell:
 - Kein Datenbankbedarf (State lebt im Browser)
 - Nur geöffnete Tabs als Kontext (nicht alle Dateien)
 
+## Wichtige Pitfalls (Vorschau)
+
+Die Vorschau ist ein `<iframe srcdoc>` mit `sandbox="allow-scripts allow-forms allow-modals"`. Daraus folgen zwei Fallen, die im Schülerprojekt als „geht einfach nicht" auftauchen:
+
+- **Die CSP der Elternseite gilt auch im iframe.** `srcdoc`-Dokumente erben sie. Externe Bibliotheken laufen deshalb nur von `cdn.jsdelivr.net`, `cdnjs.cloudflare.com`, `unpkg.com` und `esm.sh` — alles andere (z.B. `threejs.org/build/...`) wird blockiert. Bilder und Medien sind über `img-src`/`media-src https:` freigegeben, weil sie inert sind; sonst scheitern Texturen und Sprites an einer unsichtbaren Wand. Neue CDNs müssen in `vercel.json` **und** im Prompt-Zweig „LEERES PROJEKT" in `index.html` ergänzt werden.
+- **Kein `allow-same-origin` → undurchsichtiger Origin.** `localStorage` und `sessionStorage` werfen dort `SecurityError`; ein Spiel, das seinen Highscore speichert, stirbt kommentarlos. `buildPreviewHtml()` stellt der Vorschau deshalb `LOCALSTORAGE_SHIM` voran — ein Ersatz im Arbeitsspeicher mit gleicher API, der bis zum Neuladen der Vorschau hält. `allow-same-origin` darf **nicht** ergänzt werden: zusammen mit `allow-scripts` könnte der Vorschau-Code sonst auf die App selbst zugreifen.
+
+Verifiziert (2026-09-03): Three.js r160 per ESM-Importmap von unpkg lädt, WebGL rendert, `localStorage` funktioniert über den Shim.
+
 ## Wichtige Pitfalls (Monaco)
 
 - **CSP:** `unsafe-eval` + `blob:` + `worker-src blob:` in vercel.json zwingend — sonst kein Syntax-Highlighting
