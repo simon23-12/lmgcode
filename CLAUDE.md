@@ -162,7 +162,14 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 
 Die Schwelle für **1.000 Anfragen/Tag** sind **10 $ kumuliert gekaufte Credits (all-time)** — kein Mindestguthaben. Der Schalter bleibt umgelegt, auch wenn das Guthaben später wieder auf 0 fällt. `:free`-Modelle kosten $0 pro Token (im Katalog steht bei allen `pricing.prompt: "0"`), das Guthaben wird davon also nicht aufgezehrt.
 
-**Kontostand am 2026-09-03:** `total_credits: 5`, `total_usage: 0.77` — es sind erst **5 $ gekauft**, deshalb greift noch das 50er-Limit. Es fehlen also **5 $, nicht 10 $**; die Fehlermeldung sagt das auch wörtlich („Add 5 credits to unlock 1000 free model requests per day"). Abfragen mit: `curl -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/credits`
+**Erledigt am 2026-09-03:** Schwelle genommen — `total_credits: 10`, `total_usage: 0.77`. Das Tageslimit liegt damit bei **1.000 Anfragen**. Gegenprobe: `node scripts/sanity.mjs` meldete danach 9/9 online. Kontostand abfragen mit:
+```bash
+curl -H "Authorization: Bearer $OPENROUTER_API_KEY" https://openrouter.ai/api/v1/credits
+```
+
+**Welcher Account:** Der Key `lmgcode` (`sk-or-v1-35a…737`, in Vercel als `OPENROUTER_API_KEY`) gehört zum OpenRouter-Konto, das über **GitHub** (`simon23-12`) angelegt wurde — **nicht** zu dem, in das man sich mit Google/spam2312@googlemail.com einloggt. Beim Nachsehen im Dashboard also erst prüfen, ob ein Key auf `…737` endet; sonst ist es das falsche Konto.
+
+**Im selben Konto liegen weitere Keys** (`cline`, `ewhgen3test1`). Da das Tageslimit pro Account gilt, teilen die sich den Topf mit dem Unterricht. Bei 1.000/Tag unkritisch, bei einem künftigen Engpass aber die erste Stelle zum Nachsehen.
 
 **Was der Kauf NICHT ändert:** die 20 Anfragen/Minute. Bei 30 Schülern, die gleichzeitig auf Senden drücken, ist das weiterhin der bindende Engpass — ein Grund mehr, warum der Standard auf Google liegt. Der Tageszähler läuft um Mitternacht UTC zurück. Ungenutztes Guthaben kann OpenRouter nach einem Jahr verfallen lassen; die freigeschaltete Stufe bleibt davon unberührt.
 
