@@ -21,6 +21,13 @@ const MODEL_MAP = {
   free:            'openrouter/free',
 };
 
+// Groq deckelt die Antwort ohne explizites max_tokens bei 2048 Tokens — dann
+// bricht langer Code mitten im HTML ab. Echte Modellgrenzen aus models.json.
+const MAX_TOKENS = {
+  'qwen/qwen3.8-27b': 16384,
+  'openai/gpt-oss-120b': 65536,
+};
+
 const GOOGLE_TARGETS = new Set(['geminiflashlite', 'geminiflash', 'gemma']);
 const GROQ_TARGETS   = new Set(['qwen/qwen3.8-27b', 'openai/gpt-oss-120b']);
 
@@ -214,6 +221,7 @@ async function tryGroq(prompt, groqModel) {
       body: JSON.stringify({
         model: groqModel,
         messages: [{ role: 'user', content: prompt }],
+        ...(MAX_TOKENS[groqModel] ? { max_tokens: MAX_TOKENS[groqModel] } : {}),
       }),
       signal: controller.signal,
     });
@@ -257,6 +265,7 @@ async function streamGroq(prompt, groqModel, res) {
         model: groqModel,
         messages: [{ role: 'user', content: prompt }],
         stream: true,
+        ...(MAX_TOKENS[groqModel] ? { max_tokens: MAX_TOKENS[groqModel] } : {}),
       }),
       signal: controller.signal,
     });

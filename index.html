@@ -2722,8 +2722,15 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
 
     // On very first chunk: detect filename fence and redirect streaming to correct file
     if (agent.srStreamBase === null) {
-      const fenceMatch = fullText.match(/^```([\w./-]+)\n/);
-      const fenceName = fenceMatch ? fenceMatch[1] : null;
+      // Nicht auf Position 0 festnageln: Modelle stellen dem Block gern eine Zeile
+      // mit dem Dateinamen voran. Ist der Fence-Tag nur eine Sprache, wird diese
+      // Zeile als Dateiname genommen.
+      const fenceMatch = fullText.match(/(?:^|\n)```([\w./-]*)[ \t]*\n/);
+      let fenceName = fenceMatch ? fenceMatch[1] : null;
+      if (fenceMatch && (!fenceName || !fenceName.includes('.'))) {
+        const davor = fullText.slice(0, fenceMatch.index).trim().split('\n').pop() || '';
+        if (/^[\w./-]+\.[a-z0-9]+$/i.test(davor.trim())) fenceName = davor.trim();
+      }
       const streamDir = streamTargetTab && streamTargetTab.includes('/') ? streamTargetTab.replace(/\/[^/]+$/, '/') : '';
       if (fenceName && fenceName.includes('.') && (!streamTargetTab || fenceName !== streamTargetTab.split('/').pop())) {
         // New file — create it immediately and switch editor to it for live streaming
@@ -3061,7 +3068,10 @@ async function sendMessage() {
                    : (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
       const srResult = srBase ? applySearchReplace(data.text, srBase) : null;
       // ── File blocks: collect all code blocks that have a filename as identifier ──
-      const allBlocks = !srResult ? [...data.text.matchAll(/```([\w./-]*)\n([\s\S]*?)```/g)] : [];
+      // (?:```|$) nimmt auch einen nicht geschlossenen letzten Block mit — sonst landet
+      // eine abgeschnittene Antwort komplett als Rohtext im Chat statt in der Datei.
+      const allBlocks = !srResult ? [...data.text.matchAll(/```([\w./-]*)[ \t]*\n([\s\S]*?)(?:```|$)/g)] : [];
+      const abgeschnitten = ((data.text.match(/```/g) || []).length % 2) === 1;
       const dir = activeTab && activeTab.includes('/') ? activeTab.replace(/\/[^/]+$/, '/') : '';
       // A block is a "file block" if its fence identifier contains a dot (= filename)
       const fileBlocks = allBlocks.filter(m => m[1].includes('.'));
@@ -3202,6 +3212,7 @@ async function sendMessage() {
             }
             lastPath = activeTab;
             sysMsgHtml(`✓ <b>${activeTab}</b> aktualisiert &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
+            if (abgeschnitten) sysMsgHtml('⚠ Die Antwort des Modells war abgeschnitten — die Datei ist womöglich unvollständig. Schreib „mach weiter" oder wähle oben ein anderes Modell.');
           } else {
             addFile(newPath, newCode);
             lastPath = newPath;

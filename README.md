@@ -161,6 +161,7 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 - Welche Modelle über welchen Provider laufen, steht in `models.json` — nicht hier pflegen
 - Google AI Studio: `gemma-4-31b-it` via `@google/generative-ai` SDK (rate-limited, kostenlos)
 - Kriterien für Free-Modelle: kostenlos (`:free` bzw. Freikontingent), Kontext ≥ 128K, Text→Text. `scripts/update-models.mjs` filtert genau danach und schlägt passende Kandidaten vor.
+- **Groq deckelt ohne explizites `max_tokens` bei 2048 Tokens** (`finish_reason: "length"`), obwohl die Modelle 16k–64k könnten. Längerer Code bricht dann mitten im HTML ab, der Codeblock bleibt ungeschlossen und die Antwort landet als Rohtext im Chat statt in der Datei. Deshalb trägt `models.json` für Groq-Modelle ein `maxTokens`-Feld, das nach `MAX_TOKENS` in `api/chat.js` generiert und bei beiden Groq-Pfaden mitgeschickt wird. Bei einem neuen Groq-Modell den Wert aus dem Katalog übernehmen (`max_completion_tokens`) — zu hoch gesetzt quittiert Groq mit HTTP 400. OpenRouter und Google haben dieses Problem nicht (dort läuft die Antwort ohne Angabe bis zum Ende).
 - $1-Spending-Limit auf dem OpenRouter-Key als Sicherheitsnetz; alle `:free`-Modelle kosten $0
 
 ### Kontingente — der eigentliche Engpass

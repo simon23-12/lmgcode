@@ -72,7 +72,8 @@
       "id": "qwen/qwen3.8-27b",
       "rank": 7,
       "hotkey": "6",
-      "plan": false
+      "plan": false,
+      "maxTokens": 16384
     },
     {
       "key": "gptoss",
@@ -80,7 +81,8 @@
       "provider": "groq",
       "id": "openai/gpt-oss-120b",
       "rank": 8,
-      "plan": false
+      "plan": false,
+      "maxTokens": 65536
     },
     {
       "key": "free",
