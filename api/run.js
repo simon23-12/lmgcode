@@ -5,6 +5,7 @@ const COMPILER_MAP = {
   csharp:     'mono-6.12.0.199',
   typescript: 'typescript-5.6.2',
   ruby:       'ruby-3.4.1',
+  swift:      'swift-6.0.1',
 };
 
 export default async function handler(req, res) {
