@@ -4,12 +4,14 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // AUTO-GENERIERT aus models.json — nicht von Hand ändern (node scripts/sync-models.mjs)
 const GOOGLE_MODELS = {
   geminiflashlite: "gemini-3.1-flash-lite",
+  geminiflash:     "gemini-3.6-flash",
   gemma:           "gemma-4-31b-it",
 };
 
 // Sentinel bei Google-Modellen: der Key selbst (echte ID steht in GOOGLE_MODELS).
 const MODEL_MAP = {
   geminiflashlite: 'geminiflashlite',
+  geminiflash:     'geminiflash',
   north:           'cohere/north-mini-code:free',
   minimax:         'minimax/minimax-m3:free',
   nemotron:        'nvidia/nemotron-3-super-120b-a12b:free',
@@ -19,7 +21,7 @@ const MODEL_MAP = {
   free:            'openrouter/free',
 };
 
-const GOOGLE_TARGETS = new Set(['geminiflashlite', 'gemma']);
+const GOOGLE_TARGETS = new Set(['geminiflashlite', 'geminiflash', 'gemma']);
 const GROQ_TARGETS   = new Set(['qwen/qwen3.8-27b', 'openai/gpt-oss-120b']);
 
 function isGoogleModel(target) { return GOOGLE_TARGETS.has(target); }

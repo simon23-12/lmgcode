@@ -36,8 +36,9 @@ LMG Code/
 - **Icons:** Font Awesome 6.5.0 via CDN
 - **Backend:** Vercel Serverless Functions (Node.js, ESM)
 <!-- models:models -->
-- **AI-Modelle:** Acht Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
+- **AI-Modelle:** Neun Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
   - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite` via Google AI Studio
+  - **Gemini 3.6 Flash**: `gemini-3.6-flash` via Google AI Studio
   - **North Mini Code**: `cohere/north-mini-code:free` via OpenRouter
   - **MiniMax M3**: `minimax/minimax-m3:free` via OpenRouter
   - **Nemotron 3 Super**: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
@@ -98,13 +99,14 @@ Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht 
 | Gewähltes Modell | Kette |
 |---|---|
 | Gemini 3.1 Flash Lite (Standard) | Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Nemotron 3 Super → Gemma 4 31B |
+| Gemini 3.6 Flash | Gemini 3.6 Flash → Gemini 3.1 Flash Lite → MiniMax M3 → North Mini Code → Gemma 4 31B |
 | North Mini Code | North Mini Code → Gemini 3.1 Flash Lite → MiniMax M3 → Nemotron 3 Super → Gemma 4 31B |
 | MiniMax M3 | MiniMax M3 → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3 Super → Gemma 4 31B |
 | Nemotron 3 Super | Nemotron 3 Super → Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Gemma 4 31B |
 | Gemma 4 31B | Gemma 4 31B → North Mini Code → Gemini 3.1 Flash Lite → MiniMax M3 → Nemotron 3 Super |
 | Qwen3.8-27B | Qwen3.8-27B → Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Nemotron 3 Super |
 | GPT-OSS 120B | GPT-OSS 120B → Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Nemotron 3 Super |
-| Free Models Router | Free Models Router |
+| Free Models Router | Free Models Router → Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Nemotron 3 Super |
 <!-- /models:chains -->
 
 Die Fallback-Kette gilt für **beide Modi** (streaming und non-streaming):

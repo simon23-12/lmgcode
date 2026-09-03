@@ -419,6 +419,7 @@
           <select id="model-select" title="Modell wählen">
             <!-- models:dropdown -->
             <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
+            <option value="geminiflash">Gemini 3.6 Flash</option>
             <option value="north">North Mini Code</option>
             <option value="minimax">MiniMax M3</option>
             <option value="nemotron">Nemotron 3 Super</option>
@@ -485,6 +486,7 @@ const DEFAULT_MODEL = 'geminiflashlite';
 
 const SLASH_MODEL_NAMES = {
   geminiflashlite: 'Gemini 3.1 Flash Lite',
+  geminiflash:     'Gemini 3.6 Flash',
   north:           'North Mini Code',
   minimax:         'MiniMax M3',
   nemotron:        'Nemotron 3 Super',
@@ -499,13 +501,14 @@ const MODEL_HOTKEY_HINT = '1&nbsp;North&nbsp;&nbsp;2&nbsp;MiniMax&nbsp;&nbsp;3&n
 
 const FALLBACK_CHAINS = {
   geminiflashlite: ['geminiflashlite', 'north', 'minimax', 'nemotron', 'gemma'],
+  geminiflash:     ['geminiflash', 'geminiflashlite', 'minimax', 'north', 'gemma'],
   north:           ['north', 'geminiflashlite', 'minimax', 'nemotron', 'gemma'],
   minimax:         ['minimax', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
   nemotron:        ['nemotron', 'geminiflashlite', 'north', 'minimax', 'gemma'],
   gemma:           ['gemma', 'north', 'geminiflashlite', 'minimax', 'nemotron'],
   qwen:            ['qwen', 'geminiflashlite', 'north', 'minimax', 'nemotron'],
   gptoss:          ['gptoss', 'geminiflashlite', 'north', 'minimax', 'nemotron'],
-  free:            ['free'],
+  free:            ['free', 'geminiflashlite', 'north', 'minimax', 'nemotron'],
 };
 
 // Think → Code: diese Modelle bekommen bei komplexen Prompts erst eine Planungsanfrage.
@@ -551,6 +554,7 @@ function createAgent() {
     cancelStream: null,
     sessionTokens: 0,
     model: DEFAULT_MODEL,
+    neubauHinweisGezeigt: false,
     srStreamBase: null,
     srStreamApplied: false,
     streamCreatedFile: null,
@@ -2469,6 +2473,23 @@ function partialOverwriteGuard(path, newCode, agent) {
   return { vorher, oldLines, newLines };
 }
 
+// Bei einem Neubau aus dem Nichts liefern die schnellen Modelle deutlich weniger
+// (gemessen: 29 Zeilen gegen 218). Einmal pro Agent darauf hinweisen, statt die
+// tausend kleinen Edits über das geteilte OpenRouter-Kontingent zu schicken.
+const BAU_WOERTER = /\b(bau|baue|schreib|schreibe|erstell|erstelle|mach|programmier|programmiere|implementier|entwickle|build|make|create|write|code)\b/i;
+const SCHWACH_BEI_NEUBAU = new Set(['geminiflashlite', 'gemma', 'gptoss', 'qwen']);
+
+function neubauHinweis(text, agent) {
+  if (agent.neubauHinweisGezeigt) return;
+  if (!SCHWACH_BEI_NEUBAU.has(agent.model)) return;
+  if (!BAU_WOERTER.test(text)) return;
+  // Nur wenn wirklich nichts da ist, woran gearbeitet werden könnte
+  const hatInhalt = Object.keys(vfs).some(pfad => (vfs[pfad].content || '').trim() !== '');
+  if (hatInhalt) return;
+  agent.neubauHinweisGezeigt = true;
+  sysMsgHtml('Tipp: Für größere Neubauten liefern <b>MiniMax M3</b>, <b>Gemini 3.6 Flash</b> oder der <b>Free Models Router</b> deutlich mehr — oben im Dropdown wählbar. Für kleine Änderungen ist das aktuelle Modell schneller.');
+}
+
 // Zieht den Fließtext aus einer Modellantwort — alles außer Codeblöcken und
 // SEARCH/REPLACE-Blöcken. Daraus wird die Rückmeldung im Chat, statt einen
 // vorgefertigten Satz zu würfeln.
@@ -2871,6 +2892,7 @@ async function sendMessage() {
     }
   }
 
+  neubauHinweis(text, agent);
   const builtPrompt = buildPrompt(text, agent, plan);
   let data = null, networkError = false, errorHandled = false, durationMs = 0;
 

@@ -13,11 +13,28 @@
       "plan": false
     },
     {
+      "key": "geminiflash",
+      "label": "Gemini 3.6 Flash",
+      "provider": "google",
+      "id": "gemini-3.6-flash",
+      "rank": 2,
+      "plan": false,
+      "fallback": false,
+      "_notiz": "Stark bei Neubauten (95-101 Zeilen vollstaendig), aber im Free Tier oft HTTP 503 'high demand'. Deshalb fallback:false — es soll nicht in den Ketten der anderen Modelle stehen und dort Sekunden kosten. Die eigene Kette faengt den 503 ab.",
+      "chain": [
+        "geminiflash",
+        "geminiflashlite",
+        "minimax",
+        "north",
+        "gemma"
+      ]
+    },
+    {
       "key": "north",
       "label": "North Mini Code",
       "provider": "openrouter",
       "id": "cohere/north-mini-code:free",
-      "rank": 2,
+      "rank": 3,
       "hotkey": "1",
       "plan": true
     },
@@ -26,7 +43,7 @@
       "label": "MiniMax M3",
       "provider": "openrouter",
       "id": "minimax/minimax-m3:free",
-      "rank": 3,
+      "rank": 4,
       "hotkey": "2",
       "plan": true
     },
@@ -35,7 +52,7 @@
       "label": "Nemotron 3 Super",
       "provider": "openrouter",
       "id": "nvidia/nemotron-3-super-120b-a12b:free",
-      "rank": 4,
+      "rank": 5,
       "hotkey": "3",
       "plan": true
     },
@@ -44,7 +61,7 @@
       "label": "Gemma 4 31B",
       "provider": "google",
       "id": "gemma-4-31b-it",
-      "rank": 5,
+      "rank": 6,
       "hotkey": "4",
       "plan": false
     },
@@ -53,7 +70,7 @@
       "label": "Qwen3.8-27B",
       "provider": "groq",
       "id": "qwen/qwen3.8-27b",
-      "rank": 6,
+      "rank": 7,
       "hotkey": "6",
       "plan": false
     },
@@ -62,7 +79,7 @@
       "label": "GPT-OSS 120B",
       "provider": "groq",
       "id": "openai/gpt-oss-120b",
-      "rank": 7,
+      "rank": 8,
       "plan": false
     },
     {
@@ -70,12 +87,9 @@
       "label": "Free Models Router",
       "provider": "openrouter",
       "id": "openrouter/free",
-      "rank": 8,
+      "rank": 9,
       "plan": false,
-      "fallback": false,
-      "chain": [
-        "free"
-      ]
+      "fallback": true
     }
   ]
 }

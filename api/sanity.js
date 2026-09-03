@@ -10,6 +10,7 @@ const PROMPT     = '1';
 // AUTO-GENERIERT aus models.json — nicht von Hand ändern (node scripts/sync-models.mjs)
 const MODELS = [
   { name: 'Gemini 3.1 Flash Lite',  provider: 'google',      id: 'gemini-3.1-flash-lite' },
+  { name: 'Gemini 3.6 Flash',       provider: 'google',      id: 'gemini-3.6-flash' },
   { name: 'North Mini Code',        provider: 'openrouter',  id: 'cohere/north-mini-code:free' },
   { name: 'MiniMax M3',             provider: 'openrouter',  id: 'minimax/minimax-m3:free' },
   { name: 'Nemotron 3 Super',       provider: 'openrouter',  id: 'nvidia/nemotron-3-super-120b-a12b:free' },

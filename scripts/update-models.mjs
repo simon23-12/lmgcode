@@ -131,6 +131,36 @@ function neuerKey(altKey, k, belegteKeys) {
   return key;
 }
 
+// Vergleicht Versionsnummern wie "3.1" < "3.6" < "3.8" < "10.0".
+function versionKleiner(a, b) {
+  const A = a.split('.').map(Number), B = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(A.length, B.length); i++) {
+    const x = A[i] ?? 0, y = B[i] ?? 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
+
+// Sucht im Katalog neuere Versionen derselben Modellfamilie: jede Zahl in der ID
+// wird testweise durch einen Platzhalter ersetzt, dann wird geschaut, welche
+// Katalog-IDs auf dieses Muster passen und eine hoehere Nummer tragen.
+// "gemini-3.1-flash-lite" findet so "gemini-3.5-flash-lite", nicht aber "gemini-3.6-flash".
+function neuereVersionen(id, katalog) {
+  const treffer = [];
+  const zahlen = [...id.matchAll(/\d+(?:\.\d+)*/g)];
+  for (const z of zahlen) {
+    const vorher = id.slice(0, z.index), nachher = id.slice(z.index + z[0].length);
+    const muster = new RegExp('^' + esc(vorher) + '(\\d+(?:\\.\\d+)*)' + esc(nachher) + '$');
+    for (const k of katalog) {
+      const m = k.id.match(muster);
+      if (m && versionKleiner(z[0], m[1]) && istKandidat(k)) treffer.push(k);
+    }
+  }
+  return [...new Map(treffer.map(k => [k.id, k])).values()];
+}
+
+function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
 // Beim Ersetzen: Modelle aus derselben Familie bevorzugen
 // (qwen/qwen3-coder:free → lieber ein anderes Qwen-Coder-Modell als irgendetwas).
 function familienBonus(altId, k) {
@@ -229,6 +259,16 @@ for (const m of befund) {
   if (stabil) nachfolger.push({ key: m.key, von: m.id, nach: stabil.id, label: stabil.label });
 }
 
+// 4) Neuere Versionen derselben Familie (nur melden, nie automatisch tauschen —
+//    neuer heisst nachweislich nicht immer besser)
+const upgrades = [];
+for (const m of befund) {
+  const kat = KATALOG[m.provider];
+  if (!kat) continue;
+  const neuer = neuereVersionen(m.id, kat).filter(k => k.id !== m.id);
+  if (neuer.length) upgrades.push({ key: m.key, label: m.label, von: m.id, kandidaten: neuer });
+}
+
 // ── Bericht ──────────────────────────────────────────────────────────────────
 
 const SYM = { online: '✓', 'rate-limited': '✓', timeout: '⏱', offline: '✗', unbekannt: '✗', auth: '!', 'übersprungen': '·' };
@@ -243,6 +283,15 @@ for (const m of befund) {
   if (m.katalog && m.katalog.ctx && m.katalog.ctx < MIN_CTX) hinweise.push(`nur ${Math.round(m.katalog.ctx / 1000)}K Kontext`);
   log(`  ${SYM[m.test.status] ?? '?'}  ${m.label.padEnd(24)} ${m.provider.padEnd(11)} ${m.id}`);
   if (hinweise.length) log(`     ${' '.repeat(24)} ${' '.repeat(11)} → ${hinweise.join(' · ')}`);
+}
+
+if (upgrades.length) {
+  log('\nNeuere Version derselben Familie im Katalog');
+  for (const u of upgrades) {
+    log(`  ${u.label} (${u.von})`);
+    for (const k of u.kandidaten.slice(0, 4)) log(`     → ${k.id.padEnd(40)} ${String(Math.round(k.ctx / 1000) + 'K').padStart(6)}  ${k.label}`);
+  }
+  log('  Wird NICHT automatisch getauscht — vor dem Umstellen selbst gegentesten.');
 }
 
 if (nachfolger.length) {
@@ -332,6 +381,7 @@ if (AS_JSON) {
     geprueft: befund.map(({ key, label, provider, id, imKatalog, test, tot }) =>
       ({ key, label, provider, id, imKatalog, status: test.status, ms: test.ms ?? null, tot })),
     nachfolger,
+    upgrades: upgrades.map(u => ({ key: u.key, von: u.von, kandidaten: u.kandidaten.map(k => k.id) })),
     kandidaten: Object.fromEntries(Object.entries(kandidaten).map(([p, l]) =>
       [p, l.slice(0, 10).map(({ id, label, ctx }) => ({ id, label, ctx }))])),
     angewendet,
@@ -342,7 +392,8 @@ if (AS_JSON) {
         ? `${befund.length - tote.length}/${befund.length} Modelle im Katalog (kein Live-Test)`
         : `${ok}/${befund.length} Modelle erreichbar`) +
       (tote.length ? ` · ${tote.length} defekt: ${tote.map(m => m.label).join(', ')}` : '') +
-      (nachfolger.length ? ` · ${nachfolger.length} Nachfolger verfügbar` : ''));
+      (nachfolger.length ? ` · ${nachfolger.length} Nachfolger verfügbar` : '') +
+      (upgrades.length ? ` · ${upgrades.length} neuere Version(en) im Katalog` : ''));
   if (!APPLY && (tote.length || nachfolger.length)) {
     log('\nAutomatisch reparieren:  node scripts/update-models.mjs --apply\n');
   } else {
