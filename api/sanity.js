@@ -39,6 +39,9 @@ async function checkOpenAICompat(url, key, modelId) {
     const data = await r.json();
     if (!r.ok) {
       const msg = data?.error?.message || `HTTP ${r.status}`;
+      // Tageslimit von Minutendrosselung unterscheiden: ersteres ist bis morgen
+      // unbenutzbar, letzteres nach Sekunden wieder da.
+      if (/per-day|per day|daily/i.test(msg)) return { status: 'daily-limit', error: msg };
       return { status: r.status === 429 ? 'rate-limited' : 'offline', error: msg };
     }
     return { status: 'online' };

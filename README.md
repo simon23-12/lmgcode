@@ -163,6 +163,35 @@ Live-Modus ist **immer aktiv** (`liveMode = true`). Code erscheint token-by-toke
 - Kriterien für Free-Modelle: kostenlos (`:free` bzw. Freikontingent), Kontext ≥ 128K, Text→Text. `scripts/update-models.mjs` filtert genau danach und schlägt passende Kandidaten vor.
 - $1-Spending-Limit auf dem OpenRouter-Key als Sicherheitsnetz; alle `:free`-Modelle kosten $0
 
+### Kontingente — der eigentliche Engpass
+
+**OpenRouter `:free` (Stand 2026-09-03):** 20 Anfragen/Minute und **50 pro Tag** — für den gesamten Key, also die ganze Schule zusammen. Ein **einmaliger** Kauf von **10 $ Guthaben** hebt das auf **1.000 pro Tag** (RPM bleibt 20). Das Guthaben wird dabei nicht verbraucht: `:free`-Modelle kosten weiter $0, der Kauf ist nur der Schalter. Quelle: https://openrouter.ai/docs/api-reference/limits
+
+> 50 Anfragen/Tag sind bei einem Kurs mit 30 Schülern nach zehn Minuten weg. Symptom: HTTP 429 `Rate limit exceeded: free-models-per-day`. `/sanity` in der App zeigt solche Modelle als **Tageslimit erreicht** (orange ⚠), `node scripts/sanity.mjs` als ✗ mit der Fehlermeldung. Vor jeder Fehlersuche also erst prüfen, ob es nur das Tageslimit ist — die Modelle sind nicht kaputt.
+
+Das Limit gilt **gemeinsam für alle** OpenRouter-Modelle in `models.json` (aktuell North Mini Code, MiniMax M3, Nemotron, Free Models Router). Deshalb steht als Standard bewusst ein Google-Modell — sonst läuft der komplette Unterrichtsalltag durch diesen einen Topf.
+
+**Google AI Studio:** ebenfalls ein Free Tier mit Limits, aber **pro Modell** statt aus einem gemeinsamen Topf — Gemini Flash Lite und Gemma haben getrennte Kontingente. Google veröffentlicht die Zahlen nicht mehr in den Docs; die tatsächlichen Limits des Keys stehen unter https://aistudio.google.com/rate-limit
+
+**Groq:** eigenes Freikontingent, unabhängig von beiden.
+
+### Modellwahl — Messwerte (2026-09-03)
+
+Gemessen mit dem echten App-Prompt und dem Schul-Key, mehrere Läufe je Modell:
+
+| Modell | Neubau (Flappy Bird, leeres Projekt) | Kleiner Edit |
+|---|---|---|
+| gemini-3.1-flash-lite (Standard) | 3/3 erfolgreich, aber nur 29–30 Zeilen ohne Röhren/Punkte | **1,7s** |
+| gemini-3.6-flash | 1/3 erfolgreich (sonst HTTP 503), dann 95–101 Zeilen vollständig | 7,6s |
+| gemini-3.7-flash / gemini-3.8-flash | **0/3** — durchgehend HTTP 503 „high demand" | 4,2s |
+| gemini-3.5-flash-lite | 0/1 — gar kein Code | 20,4s |
+| MiniMax M3 | 220 Zeilen vollständig (18s) | 3,5s |
+| Free Models Router | 99–218 Zeilen vollständig (27–51s) | 6,8–14,2s |
+
+**Warum Flash Lite trotzdem Standard ist:** nicht weil es das stärkste ist, sondern weil es als einziges zuverlässig antwortet und beim häufigen Fall (kleine Edits) das schnellste ist. Die starken Flash-Modelle sind im Free Tier kapazitätsgedeckelt. Der 503 kommt als retryable durch, die Fallback-Kette greift also korrekt.
+
+**Free Models Router** (`openrouter/free`) liefert bei Neubauten die besten Ergebnisse, ist aber ein **Zufalls-Router** — bei identischem Prompt 99 vs. 186 vs. 218 Zeilen. Für den Unterricht als Standard ungeeignet (nicht reproduzierbar, 4–8× langsamer bei kleinen Edits, hängt am geteilten Tageslimit, und es ist nicht nachvollziehbar welcher Anbieter die Eingaben bekommt). Als bewusst wählbare Option dagegen sinnvoll — darauf weist `neubauHinweis()` in `index.html` bei leerem Projekt einmalig hin.
+
 ### Code-Execution
 
 | Sprache | Endpoint | Mechanismus |

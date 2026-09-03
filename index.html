@@ -1861,6 +1861,7 @@ function handleSlashCommand(text, agent) {
           if (m.status === 'online')        return `<span style="color:#4ade80">✓</span> ${m.name}: <b>Online</b> <span style="opacity:.5;font-size:10px">${m.ms}ms</span>`;
           if (m.status === 'timeout')       return `<span style="color:#fb923c">⏱</span> ${m.name}: <b>Timeout</b>`;
           if (m.status === 'rate-limited')  return `<span style="color:#4ade80">✓</span> ${m.name}: <b>Online</b> <span style="opacity:.5;font-size:10px">gedrosselt</span>`;
+          if (m.status === 'daily-limit')   return `<span style="color:#fb923c">⚠</span> ${m.name}: <b>Tageslimit erreicht</b> <span style="opacity:.5;font-size:10px">bis morgen nicht nutzbar</span>`;
           return `<span style="color:#f87171">✗</span> ${m.name}: <b>Offline</b>`;
         });
         d.innerHTML = `<b>Modell-Status</b><br><span style="font-size:11px;line-height:2">${lines.join('<br>')}</span>`;
