@@ -1399,7 +1399,11 @@ neuer Code
 6. Mehrere Dateien gleichzeitig: Mehrere Codeblöcke mit je eigenem Dateinamen ausgeben — alle werden automatisch angelegt.
 WICHTIG bei neuen Projekten mit mehreren Dateien: Wenn die aktuelle Datei "Unbenannt" oder leer ist, ignoriere sie — erstelle einfach die neuen Projektdateien mit den richtigen Namen (z.B. index.html, style.css, script.js). Benenne "Unbenannt" NICHT um.
 VERBOTEN: Niemals nur einen Teil ausgeben (löscht den Rest). Wenn unklar: SEARCH/REPLACE. Niemals denselben Inhalt in mehrere Dateien kopieren.
-Der SEARCH-Text muss exakt so im Original stehen (Leerzeichen und Einrückung beachten).`;
+Der SEARCH-Text muss exakt so im Original stehen (Leerzeichen und Einrückung beachten).
+
+ABSCHLUSS: Schreibe nach dem Code genau EINEN kurzen Satz (max. 15 Wörter) in der Sprache des Schülers — was du geändert oder gefixt hast, nicht was der Code tut.
+Beispiele: "Vogel ist jetzt rot statt gelb." · "Kollision mit den Röhren gefixt — du prallst jetzt ab." · "Punktezähler eingebaut."
+Keine Einleitung ("Hier ist..."), keine Aufzählung, keine Wiederholung des Codes.`;
   }
 
   if (agent.chatHistory.length > 0) {
@@ -2454,6 +2458,34 @@ function partialOverwriteGuard(path, newCode, agent) {
   return { vorher, oldLines, newLines };
 }
 
+// Zieht den Fließtext aus einer Modellantwort — alles außer Codeblöcken und
+// SEARCH/REPLACE-Blöcken. Daraus wird die Rückmeldung im Chat, statt einen
+// vorgefertigten Satz zu würfeln.
+function extractProse(text) {
+  let t = String(text)
+    .replace(/```[\s\S]*?```/g, ' ')                                                                  // fertige Codeblöcke
+    .replace(/```[\s\S]*$/, ' ')                                                                      // abgeschnittener Block
+    .replace(/^[^\S\n]*<{4,10}[^\S\n]*SEARCH[\s\S]*?^[^\S\n]*>{4,10}[^\S\n]*REPLACE[^\n]*$/gm, ' ')  // nackte SR-Blöcke
+    .replace(/^[^\S\n]*[<>=]{4,10}[^\n]*$/gm, '')                                                    // übrige Marker
+    .replace(/^#{1,6}\s*/gm, '')                                                                      // Überschriften
+    .replace(/^\s*[-*+]\s+/gm, '\u0001');                                                             // Aufzählungszeichen markieren
+
+  // Aufzählungspunkte bekommen einen Satzpunkt, damit sie beim Zusammenfügen
+  // nicht ineinanderlaufen ("Vogel rot gemacht Punktezähler gefixt").
+  let s = t.split('\n').map(l => l.trim()).filter(Boolean)
+    .map(l => l.startsWith('\u0001') ? (l => /[.!?:;]$/.test(l) ? l : l + '.')(l.slice(1).trim()) : l)
+    .join(' ').replace(/\s+/g, ' ').trim();
+  // Floskel-Einleitungen vorne abschneiden ("Hier ist der aktualisierte Code:")
+  const floskel = /^(hier( ist| sind| kommt| die| der)?|here('s| is| are)?|klar|sicher|sure|ok(ay)?|natürlich|gerne|alles klar|verstanden)\b[^.!?\\n]*[.!?:]\s*/i;
+  for (let i = 0; i < 2 && floskel.test(s); i++) s = s.replace(floskel, '').trim();
+  if (s.length < 4) return null;
+
+  const saetze = s.match(/[^.!?]+[.!?]+/g);
+  if (saetze && saetze.length > 2) s = saetze.slice(0, 2).map(x => x.trim()).join(' ');
+  if (s.length > 240) s = s.slice(0, 237).replace(/\s+\S*$/, '') + '…';
+  return s;
+}
+
 // Meldet SEARCH/REPLACE-Blöcke, die erkannt, aber im Code nicht gefunden wurden —
 // sonst verschwinden sie stillschweigend und der Schüler glaubt, alles sei angewendet.
 function reportSRFailures(res) {
@@ -2969,7 +3001,13 @@ async function sendMessage() {
         ];
         const quipDiv = document.createElement('div');
         quipDiv.className = 'chat-msg bot';
-        quipDiv.textContent = doneMessages[Math.floor(Math.random() * doneMessages.length)];
+        // Bevorzugt sagt das Modell selbst, was es geändert hat; sonst ein Standardsatz.
+        const prosa = extractProse(data.text);
+        if (prosa) {
+          quipDiv.innerHTML = marked.parseInline ? marked.parseInline(prosa) : prosa;
+        } else {
+          quipDiv.textContent = doneMessages[Math.floor(Math.random() * doneMessages.length)];
+        }
         msgs.appendChild(quipDiv);
         pendingQuip = quipDiv;
       } else {
