@@ -1414,6 +1414,7 @@ Es gibt noch keine Datei. Wenn der Schüler etwas gebaut haben will — auch wen
 
 REGEL: Ein Codeblock pro Datei, mit dem Dateinamen als Bezeichner — \`\`\`index.html, \`\`\`spiel.py, \`\`\`Main.java. NIE nur die Sprache (\`\`\`html, \`\`\`python).
 - Spiele und alles Interaktive: EINE einzige \`\`\`index.html mit HTML, CSS und JS zusammen — läuft sofort in der Vorschau.
+- Mehrseitige Websites sind ausdrücklich erlaubt: mehrere HTML-Dateien mit relativen Links (\`<a href="about.html">\`, auch \`unterordner/seite.html\`). Die Vorschau folgt diesen Links im Projekt. Jede verlinkte Seite auch wirklich anlegen — sonst läuft der Link ins Leere.
 - Vollständig und lauffähig: kein Gerüst, keine TODOs, keine "hier noch ergänzen"-Kommentare.
 - Externe Bibliotheken nur per CDN-Link, und NUR von \`cdn.jsdelivr.net\`, \`cdnjs.cloudflare.com\`, \`unpkg.com\` oder \`esm.sh\` — andere Hosts blockiert die Vorschau.
 - Ausführbar sind hier: HTML/CSS/JS im Browser, Python/TigerJython, Java, C, C++, C#, Go, Rust, Haskell, Ruby, TypeScript, Swift.
@@ -2076,9 +2077,11 @@ function updateChatStats(completionTokens, durationMs) {
 
 let previewActive = false;
 
-function buildPreviewHtml() {
-  // Find HTML entry point: active tab first, then any .html file
-  const htmlFile = (activeTab && activeTab.match(/\.html?$/i))
+function buildPreviewHtml(zielSeite) {
+  // Find HTML entry point: explicit target, then active tab, then any .html file
+  const htmlFile = (zielSeite && vfs[zielSeite])
+    ? zielSeite
+    : (activeTab && activeTab.match(/\.html?$/i))
     ? activeTab
     : Object.keys(vfs).find(p => p.match(/\.html?$/i));
   if (!htmlFile) return null;
@@ -2115,8 +2118,61 @@ function buildPreviewHtml() {
     return `<script${otherAttrs ? ' ' + otherAttrs : ''}>${vfs[resolved].content}<\/script>`;
   });
 
-  return LOCALSTORAGE_SHIM + html;
+  return LOCALSTORAGE_SHIM + navShim(htmlFile) + html;
 }
+
+// In einem srcdoc-iframe ist die Basis-URL die der ELTERNSEITE. Ein <a href="about.html">
+// zeigt damit auf lmgcode.vercel.app/about.html — den Server, nicht aufs Projekt. Ergebnis:
+// 404 bei jeder mehrseitigen Website. Der Shim fängt solche Klicks ab und lässt die
+// Elternseite die Zielseite aus dem vfs neu rendern.
+function navShim(aktuellerPfad) {
+  return `<script>
+(function () {
+  document.addEventListener('click', function (e) {
+    const a = e.target && e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    const href = a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#') return;
+    if (/^(https?:|mailto:|tel:|data:|blob:|javascript:)/i.test(href)) return;
+    e.preventDefault();
+    parent.postMessage({ __lmgNav: href, von: ${JSON.stringify(aktuellerPfad)} }, '*');
+  }, true);
+})();
+<\/script>
+`;
+}
+
+// Relativen Link gegen das Verzeichnis der aktuellen Seite aufloesen.
+function loesePreviewPfad(vonPfad, href) {
+  const sauber = href.split('#')[0].split('?')[0];
+  if (!sauber) return null;
+  const basis = vonPfad && vonPfad.includes('/') ? vonPfad.slice(0, vonPfad.lastIndexOf('/') + 1) : '';
+  const teile = (sauber.startsWith('/') ? sauber.slice(1) : basis + sauber).split('/');
+  const norm = [];
+  for (const t of teile) { if (t === '..') norm.pop(); else if (t && t !== '.') norm.push(t); }
+  let ziel = norm.join('/');
+  if (!ziel) return null;
+  if (vfs[ziel]) return ziel;
+  // "about/" oder "about" → about/index.html bzw. about.html
+  for (const kandidat of [ziel + '/index.html', ziel + '.html', ziel + '/index.htm', ziel + '.htm']) {
+    if (vfs[kandidat]) return kandidat;
+  }
+  return null;
+}
+
+window.addEventListener('message', function (e) {
+  const d = e.data;
+  if (!d || typeof d.__lmgNav !== 'string') return;
+  const ziel = loesePreviewPfad(d.von, d.__lmgNav);
+  if (ziel) {
+    previewSeite = ziel;
+    document.getElementById('preview-frame').srcdoc = buildPreviewHtml(ziel);
+  } else {
+    sysMsg(`Die Seite „${d.__lmgNav}" gibt es im Projekt noch nicht — sag mir, dass ich sie anlegen soll.`);
+  }
+});
+
+let previewSeite = null;
 
 // Das Vorschau-iframe läuft ohne allow-same-origin und hat damit einen
 // undurchsichtigen Origin — jeder Zugriff auf localStorage wirft dort einen
@@ -2154,6 +2210,7 @@ function togglePreview() {
 
   if (previewActive) {
     if (runOutputActive) toggleRunOutput(); // close run panel if open
+    previewSeite = null;
     const html = buildPreviewHtml();
     if (!html) {
       previewActive = false;
@@ -2620,7 +2677,26 @@ function anchorFragment(content, fragment) {
   const firstIdx = fragLines.findIndex(l => l.trim() !== '');
   if (firstIdx === -1) return null;
   const anchor = fragLines[firstIdx].trim();
-  if (!anchor.endsWith('{')) return null;                 // nur Blöcke sind eindeutig genug
+
+  // HTML-Fragment mit id: die id ist der Anker. Modelle schicken für "mach das
+  // Display schwarz" gern nur <div id="display" …>…</div> zurück.
+  const idTreffer = anchor.match(/^<\s*[a-z][\w-]*\s[^>]*\bid\s*=\s*["']([\w-]+)["']/i);
+  if (idTreffer) {
+    const id = idTreffer[1];
+    const lines = content.split('\n');
+    const zeilen = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (new RegExp('\\bid\\s*=\\s*["\']' + id + '["\']').test(lines[i])) zeilen.push(i);
+    }
+    if (zeilen.length !== 1) return null;                 // id nicht eindeutig → nicht raten
+    const start = zeilen[0];
+    const indent = (lines[start].match(/^[ \t]*/) || [''])[0];
+    const neu = fragLines.slice(firstIdx).map((l, i) => (i === 0 ? indent + l.trim() : l));
+    lines.splice(start, 1, ...neu);
+    return { content: lines.join('\n'), added: neu.length, removed: 1 };
+  }
+
+  if (!anchor.endsWith('{')) return null;                 // sonst nur Blöcke sind eindeutig genug
 
   const roh = fragment.split('\n').map(ohneStrings).join('\n');
   const auf = (roh.match(/\{/g) || []).length, zu = (roh.match(/\}/g) || []).length;
@@ -3249,6 +3325,18 @@ async function sendMessage() {
           const zielPfad = isActiveFile ? activeTab : newPath;
           const teil = partialOverwriteGuard(zielPfad, newCode, agent);
           if (teil) {
+            // Teil-Ausgabe muss kein Verlust sein: manche Modelle schicken den
+            // geänderten Ausschnitt in einer Fence MIT Dateinamen. Erst verankern,
+            // erst wenn das scheitert die Datei in Ruhe lassen.
+            const verankert = applyFragments(teil.vorher, [newCode]);
+            if (verankert) {
+              vfs[zielPfad].content = verankert.content;
+              vfs[zielPfad].model?.setValue(verankert.content);
+              lastPath = zielPfad;
+              sysMsgHtml(`✓ ${verankert.count} Block/Blöcke in ${zielPfad} eingesetzt &nbsp;<span style="color:#4caf50">+${verankert.added}</span> <span style="color:#f44336">−${verankert.removed}</span>`);
+              reportSRFailures(verankert);
+              continue;
+            }
             if (vfs[zielPfad]?.model && vfs[zielPfad].content !== teil.vorher) {
               vfs[zielPfad].content = teil.vorher;
               vfs[zielPfad].model.setValue(teil.vorher);
