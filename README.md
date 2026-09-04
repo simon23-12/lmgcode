@@ -82,6 +82,11 @@ vfs[path] = { content, language, model }
 ### Kontext-Strategie
 Nur **geöffnete Tabs** werden als Kontext ans Modell geschickt — nicht alle Dateien im Baum. Ein Badge im Chat-Header zeigt wie viele Dateien im Kontext sind. Max. 60.000 Zeichen pro Datei (dann gekürzt).
 
+Daraus folgt zweierlei, was beim GitHub-Import lange falsch war:
+
+- **Der Import öffnet alle geholten Dateien** (max. 8), sortiert nach `rang()` in `importGithubRepo()`: `index.html` zuerst, dann HTML, Quellcode, README, Punkt-Verzeichnisse zuletzt. Vorher wurde nur `filesToFetch[0]` in Baumreihenfolge geöffnet — bei einem Repo mit `.github/workflows` war das die CI-Datei, und der Assistent sah vom eigentlichen Projekt **nichts**.
+- **SEARCH/REPLACE-Blöcke tragen keinen Dateinamen.** `applySearchReplaceImProjekt()` probiert deshalb zuerst die aktive Datei und danach die übrigen im vfs. Passt der Suchtext in genau eine, wird dort angewendet, der Tab geöffnet und der Pfad in der Meldung genannt; passt er in mehrere, wird **nicht geraten**. Monaco-Modelle entstehen erst beim Öffnen (`switchTab`), deshalb darf die Suche nicht auf `vfs[p].model` filtern.
+
 ### Prompt-Struktur
 ```
 [System-Instruktion]

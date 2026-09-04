@@ -1689,11 +1689,32 @@ async function importGithubRepo(rawUrl) {
   }
 
   renderTree();
-  // Open first file automatically
-  const firstPath = prefix
-    ? filesToFetch[0]?.path.slice(prefix.length + 1)
-    : filesToFetch[0]?.path;
-  if (firstPath && vfs[firstPath]) openTab(firstPath);
+
+  // Nur GEOEFFNETE Tabs gehen als Kontext ans Modell. Frueher wurde nur die erste
+  // Datei der Baumreihenfolge geoeffnet — bei einem Repo mit .github/workflows war
+  // das die CI-Datei, und der Assistent sah vom eigentlichen Projekt nichts.
+  // Deshalb: alle importierten Dateien oeffnen (gedeckelt), sinnvoll sortiert,
+  // damit die Einstiegsdatei aktiv ist.
+  const MAX_AUTO_TABS = 8;
+  const rang = pfad => {
+    const n = pfad.toLowerCase();
+    if (/(^|\/)index\.html?$/.test(n)) return 0;
+    if (/\.html?$/.test(n))             return 1;
+    if (/\.(css|js|mjs|ts|jsx|tsx|py|java)$/.test(n)) return 2;
+    if (/(^|\/)readme\.md$/.test(n))    return 3;
+    if (n.startsWith('.') || n.includes('/.')) return 6;   // .github & Co. ans Ende
+    return 4;
+  };
+  const importiert = filesToFetch
+    .map(item => (prefix ? item.path.slice(prefix.length + 1) : item.path))
+    .filter(pfad => vfs[pfad] && !vfs[pfad].binary)
+    .sort((a, b) => rang(a) - rang(b) || a.localeCompare(b));
+
+  for (const pfad of importiert.slice(0, MAX_AUTO_TABS)) openTab(pfad);
+  if (importiert[0]) openTab(importiert[0]);   // Einstiegsdatei aktiv lassen
+  if (importiert.length > MAX_AUTO_TABS) {
+    sysMsg(`${MAX_AUTO_TABS} von ${importiert.length} Dateien als Kontext geöffnet — weitere bei Bedarf im Baum anklicken.`);
+  }
 
   statusEl.textContent = `✓ ${imported} Datei(en) aus ${label} importiert.${skipped > 0 ? ` (${skipped} nicht geladen)` : ''}`;
   scrollMsgs();
@@ -2645,6 +2666,24 @@ function strippeRandmarker(text) {
     .replace(/(?:\n[^\S\n]*[<>=]{4,10}[^\n]*)+$/, '');
 }
 
+// SEARCH/REPLACE-Blöcke tragen keinen Dateinamen. Bisher wurden sie nur gegen die
+// aktive Datei versucht — bei einem importierten Projekt liegt die gesuchte Stelle
+// aber oft in einer anderen. Deshalb: erst die aktive, dann die übrigen Dateien.
+// Passt der Text in mehrere, wird nicht geraten.
+function applySearchReplaceImProjekt(text, bevorzugt, basisInhalt) {
+  if (basisInhalt !== null && basisInhalt !== undefined) {
+    const treffer = applySearchReplace(text, basisInhalt);
+    if (treffer) return { ...treffer, pfad: bevorzugt };
+  }
+  const andere = [];
+  for (const pfad of Object.keys(vfs)) {
+    if (pfad === bevorzugt || vfs[pfad].binary) continue;
+    const r = applySearchReplace(text, vfs[pfad].content);
+    if (r) andere.push({ ...r, pfad });
+  }
+  return andere.length === 1 ? andere[0] : null;
+}
+
 function applySearchReplace(text, currentContent) {
   const norm = text
     .replace(/\r\n/g, '\n')
@@ -3066,7 +3105,9 @@ async function sendMessage() {
       // Use srStreamBase if streaming already applied blocks (so stats are computed against original)
       const srBase = agent.srStreamBase !== null ? agent.srStreamBase
                    : (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
-      const srResult = srBase ? applySearchReplace(data.text, srBase) : null;
+      const srResult = /<{4,10}[^\S\n]*SEARCH/.test(data.text)
+        ? applySearchReplaceImProjekt(data.text, activeTab, srBase)
+        : null;
       // ── File blocks: collect all code blocks that have a filename as identifier ──
       // (?:```|$) nimmt auch einen nicht geschlossenen letzten Block mit — sonst landet
       // eine abgeschnittene Antwort komplett als Rohtext im Chat statt in der Datei.
@@ -3142,16 +3183,26 @@ async function sendMessage() {
       }
 
       if (srResult) {
-        if (!agent.srStreamApplied) {
-          // Non-streaming mode: apply now
-          if (!agent.undoSnapshot && activeTab && vfs[activeTab]?.content !== undefined) {
-            agent.undoSnapshot = { path: activeTab, content: vfs[activeTab].content };
+        const srPfad = srResult.pfad || activeTab;
+        // Streaming hat nur in die aktive Datei geschrieben — traf es eine andere,
+        // muss die aktive zurueckgerollt und die richtige beschrieben werden.
+        const andereDatei = srPfad !== activeTab;
+        if (andereDatei && agent.srStreamBase !== null && activeTab && vfs[activeTab]?.model) {
+          vfs[activeTab].content = agent.srStreamBase;
+          vfs[activeTab].model.setValue(agent.srStreamBase);
+        }
+        if (!agent.srStreamApplied || andereDatei) {
+          if (!agent.undoSnapshot && vfs[srPfad]?.content !== undefined) {
+            agent.undoSnapshot = { path: srPfad, content: vfs[srPfad].content };
             document.getElementById('undo-btn').classList.add('visible');
           }
-          vfs[activeTab].content = srResult.content;
-          vfs[activeTab].model.setValue(srResult.content);
+          vfs[srPfad].content = srResult.content;
+          // Modell kann noch fehlen (Datei nie geoeffnet) — switchTab baut es dann
+          // beim Oeffnen aus content auf.
+          vfs[srPfad].model?.setValue(srResult.content);
         }
-        sysMsgHtml(`✓ ${srResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${srResult.added}</span> <span style="color:#f44336">−${srResult.removed}</span>`);
+        if (andereDatei) { openTab(srPfad); renderTree(); }
+        sysMsgHtml(`✓ ${srResult.count} Stelle(n) in ${srPfad} aktualisiert &nbsp;<span style="color:#4caf50">+${srResult.added}</span> <span style="color:#f44336">−${srResult.removed}</span>`);
         reportSRFailures(srResult);
       } else if (fileBlocks.length) {
         // Restore active tab only if streaming wrote into it unintentionally (not a new file we created)
