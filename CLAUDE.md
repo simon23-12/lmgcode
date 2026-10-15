@@ -78,7 +78,17 @@ Nur **geöffnete Tabs** werden als Kontext ans Modell geschickt — nicht alle D
 Daraus folgt zweierlei, was beim GitHub-Import lange falsch war:
 
 - **Der Import öffnet alle geholten Dateien** (max. 8), sortiert nach `rang()` in `importGithubRepo()`: `index.html` zuerst, dann HTML, Quellcode, README, Punkt-Verzeichnisse zuletzt. Vorher wurde nur `filesToFetch[0]` in Baumreihenfolge geöffnet — bei einem Repo mit `.github/workflows` war das die CI-Datei, und der Assistent sah vom eigentlichen Projekt **nichts**.
-- **SEARCH/REPLACE-Blöcke tragen keinen Dateinamen.** `applySearchReplaceImProjekt()` probiert deshalb zuerst die aktive Datei und danach die übrigen im vfs. Passt der Suchtext in genau eine, wird dort angewendet, der Tab geöffnet und der Pfad in der Meldung genannt; passt er in mehrere, wird **nicht geraten**. Monaco-Modelle entstehen erst beim Öffnen (`switchTab`), deshalb darf die Suche nicht auf `vfs[p].model` filtern.
+- **SEARCH/REPLACE wird Block für Block verteilt** (`applySRProjekt()`), nicht die ganze Antwort gegen eine Datei. Ziel je Block: der genannte Dateiname (Fence ```` ```script.js ````, Zusatz hinter `SEARCH`, Zeile davor wie `**style.css**` / ``In `script.js`:``; Folgeblöcke erben ihn) → die beim Senden aktive Datei → die *eine* andere Datei, in der der Text steht. Passt er in mehrere, wird **nicht geraten**. Monaco-Modelle entstehen erst beim Öffnen (`switchTab`), deshalb darf die Suche nicht auf `vfs[p].model` filtern.
+
+  Vorher (gemessen 2026-10-14, 38 echte Antworten von 8 Modellen): Bei Änderungen über HTML+CSS+JS kam nur die erste Datei an (3 von 4 Fällen), bei „Seite anlegen und verlinken" fehlte die neue Datei immer (4 von 4 — Codeblöcke mit Dateinamen wurden verworfen, sobald SEARCH/REPLACE dabei war), und ein SEARCH/REPLACE im Fence ```` ```style.css ```` bei aktiver `script.js` landete im Chat und **leerte** dabei `style.css` (Streaming hielt sie für eine neue Datei mit Basis `''`). Diese Fälle sind das, was im Unterricht als „Code landet im Chat" auffiel.
+
+  Was jetzt noch im Chat landet, lässt sich wirklich nicht anwenden: erfundener Suchtext, abgeschnittene Antwort, mehrdeutiger Treffer. `applyOneBlock()` versucht als letzte Stufe Groß/klein, Anführungszeichen und Leerraum zu ignorieren (nur bei eindeutigem Treffer) — das fängt `'Yellow'` statt `'yellow'` ab.
+
+  **Ausschnitt statt ganzer Datei:** Modelle schicken für „füge einen roten Reset-Button hinzu" gern nur die neue Regel `#reset { … }` in einem ```` ```style.css ````-Block. `partialOverwriteGuard()` wertet einen Block deshalb auch dann als Ausschnitt, wenn er kürzer ist **und** weniger als 30 % der alten Zeilen enthält (die 50-%-Schwelle allein ließ das bei kleinen Dateien durch → Datei überschrieben). `bringeFragmentUnter()` ersetzt dann einen Block mit gleicher erster Zeile oder hängt bei CSS/JS an — bei JS nur, wenn kein vorhandener Name neu deklariert wird. Sonst bleibt die Datei unangetastet.
+
+  Weitere Muster aus der Live-Runde (2026-10-15): GPT-OSS sucht mit `SEARCH` nur `}`, um eine CSS-Regel anzuhängen — passt in `.css` und `.js`; bei Mehrdeutigkeit entscheidet `codeArt()` des Ersatztextes. Qwen vergisst das schließende ``` nach dem ersten Block; ein neuer Fence-Öffner mit Bezeichner beendet ihn deshalb (`sammleCodeBloecke()`). North schickt für `index.html` nur `<body>…</body>` — HTML ohne `<!DOCTYPE>`/`<html>` gegen eine ganze Seite gilt als Ausschnitt, und eindeutige Strukturelemente (`body`, `head`, `main`, `header`, `footer`, `nav`) sind in `anchorFragment()` Anker.
+
+  Test-Rezept: im Browser `window.fetch` für `/api/chat` durch einen Fake-SSE-Stream mit gespeicherten Modellantworten ersetzen und `sendMessage()` aufrufen — so laufen echte Antworten durch die komplette Pipeline inkl. Live-Streaming, ohne Kontingent zu verbrauchen.
 
 ### Prompt-Struktur
 ```
@@ -126,7 +136,8 @@ Mehrere unabhängige Chat-Agenten können gleichzeitig aktiv sein. Jeder Agent h
 ```js
 agents: Map<id, {
   id, chatHistory, learnMode, isTyping, sessionTokens, model,
-  srStreamBase, srStreamApplied, messagesEl  // eigener DOM-Pane
+  srStreamBase, srStreamPfad, undoSnapshot, messagesEl  // eigener DOM-Pane
+  // undoSnapshot = [{ path, content }] — eine Antwort kann mehrere Dateien ändern
 }>
 ```
 

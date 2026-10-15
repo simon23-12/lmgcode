@@ -556,7 +556,7 @@ function createAgent() {
     model: DEFAULT_MODEL,
     neubauHinweisGezeigt: false,
     srStreamBase: null,
-    srStreamApplied: false,
+    srStreamPfad: null,
     streamCreatedFile: null,
     undoSnapshot: null,
     messagesEl: pane,
@@ -2016,15 +2016,18 @@ function handleSlashCommand(text, agent) {
 document.getElementById('undo-btn').onclick = () => {
   const agent = agents.get(activeAgentId);
   if (!agent?.undoSnapshot) return;
-  const { path, content } = agent.undoSnapshot;
-  if (vfs[path]?.model) {
+  const stände = Array.isArray(agent.undoSnapshot) ? agent.undoSnapshot : [agent.undoSnapshot];
+  let zuletzt = null;
+  for (const { path, content } of stände) {
+    if (!vfs[path]) continue;
     vfs[path].content = content;
-    vfs[path].model.setValue(content);
-    if (activeTab !== path) {
-      // Switch to the affected file so user sees the result
-      openTab(path);
-    }
-    sysMsg('Letzte KI-Änderung rückgängig gemacht.');
+    vfs[path].model?.setValue(content);
+    zuletzt = path;
+  }
+  if (zuletzt) {
+    // Switch to the affected file so user sees the result
+    if (!stände.some(s => s.path === activeTab)) openTab(zuletzt);
+    sysMsg(stände.length > 1 ? `Letzte KI-Änderung rückgängig gemacht (${stände.length} Dateien).` : 'Letzte KI-Änderung rückgängig gemacht.');
   }
   agent.undoSnapshot = null;
   document.getElementById('undo-btn').classList.remove('visible');
@@ -2512,11 +2515,14 @@ function inferFilename(lang) {
 
 function extractStreamingCode(text) {
   // Don't live-update during streaming if it's a SEARCH/REPLACE response (full or partial)
-  if (text.includes('<<<<<<<')) return null;
+  if (/<{4,10}/.test(text)) return null;
   // Find the first code fence — if its identifier is a filename (has dot), stream into active tab
   // (will be redirected to new file at stream end). If it's a language tag, stream normally.
   const match = text.match(/```([\w./-]*)\n([\s\S]*?)(?:```|$)/);
-  return match ? match[2] : null;
+  if (!match) return null;
+  // Beginnt der Block mit "<<", kommt gleich ein SEARCH-Marker — nichts in die Datei schreiben.
+  if (/^\s*<</.test(match[2]) || /^\s*<$/.test(match[2])) return null;
+  return match[2];
 }
 
 // Wendet einen einzelnen SEARCH/REPLACE-Block an. Leiter von streng nach tolerant.
@@ -2540,22 +2546,31 @@ function applyOneBlock(content, search, replace) {
   }
 
   // 2. Zeilenweise: Einrückung egal, Leerzeilen in der Datei werden übersprungen.
+  // 3. Wie 2, zusätzlich Groß/klein, Anführungszeichen und Leerraum in der Zeile egal
+  //    ('Yellow' statt 'yellow', "x" statt 'x') — aber nur bei genau einem Treffer.
   const lines = content.split('\n');
-  const needleLines = search.split('\n').map(l => nfc(l.trim())).filter(l => l !== '');
-  if (!needleLines.length) return null;
-  // Eine einzelne, sehr kurze Zeile ("}" o. ä.) ist zu mehrdeutig fürs Fuzzy-Matching.
-  if (needleLines.length === 1 && needleLines[0].length < 4) return null;
+  const streng   = l => nfc(l.trim());
+  const locker   = l => nfc(l.trim()).toLowerCase().replace(/["'`]/g, "'").replace(/\s+/g, ' ').replace(/\s*;$/, '');
+  for (const [key, eindeutig] of [[streng, false], [locker, true]]) {
+    const needleLines = search.split('\n').map(key).filter(l => l !== '');
+    if (!needleLines.length) return null;
+    // Eine einzelne, sehr kurze Zeile ("}" o. ä.) ist zu mehrdeutig fürs Fuzzy-Matching.
+    if (needleLines.length === 1 && needleLines[0].length < 4) return null;
 
-  for (let i = 0; i < lines.length; i++) {
-    if (nfc(lines[i].trim()) !== needleLines[0]) continue;
-    let k = 1, j = i + 1;
-    while (k < needleLines.length && j < lines.length) {
-      const cur = nfc(lines[j].trim());
-      if (cur === '') { j++; continue; }
-      if (cur !== needleLines[k]) break;
-      k++; j++;
+    const treffer = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (key(lines[i]) !== needleLines[0]) continue;
+      let k = 1, j = i + 1;
+      while (k < needleLines.length && j < lines.length) {
+        const cur = key(lines[j]);
+        if (cur === '') { j++; continue; }
+        if (cur !== needleLines[k]) break;
+        k++; j++;
+      }
+      if (k === needleLines.length) { treffer.push([i, j]); if (!eindeutig) break; }
     }
-    if (k !== needleLines.length) continue;
+    if (treffer.length !== 1) continue;
+    const [i, j] = treffer[0];
     const indent = (lines[i].match(/^[ \t]*/) || [''])[0];
     const repl = replace === '' ? [] : replace.split('\n').map((l, idx) =>
       idx === 0 ? indent + l.replace(/^[ \t]*/, '') : l);
@@ -2570,14 +2585,48 @@ function applyOneBlock(content, search, replace) {
 // Live-Streaming bereits das Fragment enthalten und würde es mit sich selbst
 // vergleichen. Gibt null zurück, wenn das Überschreiben in Ordnung geht.
 function partialOverwriteGuard(path, newCode, agent) {
-  const vorher = (agent.srStreamBase !== null && !agent.streamCreatedFile && path === activeTab)
+  const vorher = (agent.srStreamBase !== null && !agent.streamCreatedFile && path === agent.srStreamPfad)
                ? agent.srStreamBase
                : (vfs[path] ? vfs[path].content : '');
   if (!vorher || !vorher.trim()) return null;   // neue oder leere Datei — alles erlaubt
   const oldLines = (vorher.match(/\n/g) || []).length + 1;
   const newLines = (newCode.match(/\n/g) || []).length + 1;
-  if (newLines >= oldLines * 0.5) return null;
-  return { vorher, oldLines, newLines };
+  if (newLines < oldLines * 0.5) return { vorher, oldLines, newLines };
+  // Ganze HTML-Seite vorher, jetzt ohne <!DOCTYPE>/<html> = nur ein Ausschnitt
+  if (/<!doctype|<html[\s>]/i.test(vorher) && !/<!doctype|<html[\s>]/i.test(newCode)) return { vorher, oldLines, newLines };
+  // Kürzer UND kaum etwas vom alten Inhalt drin = Ausschnitt, keine neue Fassung.
+  // Typisch: nur die neue Regel "#reset { … }" im ```style.css-Block — die
+  // 50-%-Schwelle lässt das bei kleinen Dateien durch, und die Datei wäre weg.
+  if (newLines < oldLines) {
+    const merkmal = l => l.trim().replace(/\s+/g, ' ');
+    const neu = new Set(newCode.split('\n').map(merkmal));
+    const alt = vorher.split('\n').map(merkmal).filter(l => l.length > 3);
+    const geteilt = alt.filter(l => neu.has(l)).length;
+    if (alt.length && geteilt / alt.length < 0.3) return { vorher, oldLines, newLines };
+  }
+  return null;
+}
+
+// Ausschnitt in einer vorhandenen Datei unterbringen: erst einen vorhandenen Block
+// (gleiche erste Zeile) ersetzen, sonst bei CSS/JS als neue Regel bzw. Funktion
+// anhängen — das ist bei "füge einen roten Reset-Button hinzu" fast immer gemeint.
+// JS nur, wenn der Ausschnitt keinen Namen neu deklariert, den es schon gibt
+// (doppeltes const/let wäre ein SyntaxError).
+function bringeFragmentUnter(pfad, vorher, code) {
+  const verankert = applyFragments(vorher, [code]);
+  if (verankert) return { ...verankert, art: 'eingesetzt' };
+  const ext = (pfad.split('.').pop() || '').toLowerCase();
+  if (!['css', 'js', 'mjs'].includes(ext) || !code.trim()) return null;
+  const roh = code.split('\n').map(ohneStrings).join('\n');
+  if ((roh.match(/\{/g) || []).length !== (roh.match(/\}/g) || []).length) return null;
+  if (ext !== 'css') {
+    const namen = [...code.matchAll(/^\s*(?:async\s+)?(?:function\s*\*?|const|let|var|class)\s+([\w$]+)/gm)].map(m => m[1]);
+    const schonDa = namen.some(n => new RegExp('(?:function\\s*\\*?|const|let|var|class)\\s+' + n.replace(/\$/g, '\\$') + '\\b').test(vorher));
+    if (schonDa) return null;
+  }
+  const zeilen = code.split('\n').length;
+  return { content: vorher.replace(/\s*$/, '') + '\n\n' + code.replace(/\s*$/, '') + '\n',
+           count: 1, blocks: 1, added: zeilen, removed: 0, failed: [], art: 'angehängt' };
 }
 
 // Bei einem Neubau aus dem Nichts liefern die schnellen Modelle deutlich weniger
@@ -2678,6 +2727,25 @@ function anchorFragment(content, fragment) {
   if (firstIdx === -1) return null;
   const anchor = fragLines[firstIdx].trim();
 
+  // HTML-Strukturelement (<body>…</body>, <main>…): ersetzen, wenn es im Code genau
+  // einmal vorkommt und das Fragment es vollständig enthält. Modelle schicken für
+  // "füge einen Button hinzu" gern nur den <body> — ohne Anker wäre <head> weg.
+  const tagTreffer = anchor.match(/^<\s*(body|head|main|header|footer|nav)\b/i);
+  if (tagTreffer) {
+    const tag = tagTreffer[1].toLowerCase();
+    const auf = new RegExp('<\\s*' + tag + '\\b', 'i'), zu = new RegExp('<\\/\\s*' + tag + '\\s*>', 'i');
+    if (!zu.test(fragment)) return null;
+    const lines = content.split('\n');
+    const a = lines.flatMap((l, i) => auf.test(l) ? [i] : []);
+    const z = lines.flatMap((l, i) => zu.test(l) ? [i] : []);
+    if (a.length !== 1 || z.length !== 1 || z[0] < a[0]) return null;
+    const indent = (lines[a[0]].match(/^[ \t]*/) || [''])[0];
+    const neu = fragLines.slice(firstIdx).map((l, i) => (i === 0 ? indent + l.trim() : l));
+    while (neu.length && neu[neu.length - 1].trim() === '') neu.pop();
+    lines.splice(a[0], z[0] - a[0] + 1, ...neu);
+    return { content: lines.join('\n'), added: neu.length, removed: z[0] - a[0] + 1 };
+  }
+
   // HTML-Fragment mit id: die id ist der Anker. Modelle schicken für "mach das
   // Display schwarz" gern nur <div id="display" …>…</div> zurück.
   const idTreffer = anchor.match(/^<\s*[a-z][\w-]*\s[^>]*\bid\s*=\s*["']([\w-]+)["']/i);
@@ -2742,25 +2810,60 @@ function strippeRandmarker(text) {
     .replace(/(?:\n[^\S\n]*[<>=]{4,10}[^\n]*)+$/, '');
 }
 
-// SEARCH/REPLACE-Blöcke tragen keinen Dateinamen. Bisher wurden sie nur gegen die
-// aktive Datei versucht — bei einem importierten Projekt liegt die gesuchte Stelle
-// aber oft in einer anderen. Deshalb: erst die aktive, dann die übrigen Dateien.
-// Passt der Text in mehrere, wird nicht geraten.
-function applySearchReplaceImProjekt(text, bevorzugt, basisInhalt) {
-  if (basisInhalt !== null && basisInhalt !== undefined) {
-    const treffer = applySearchReplace(text, basisInhalt);
-    if (treffer) return { ...treffer, pfad: bevorzugt };
+const SR_MARKER = /^[^\S\n]*<{4,10}[^\S\n]*SEARCH/m;
+
+// Dateinamen erkennen — im Fence-Bezeichner (```script.js, ```html:index.html,
+// ```js title="spiel.js") oder in einer Zeile direkt vor dem Block
+// (**about.html**, `style.css`:, ### index.html, "In script.js:").
+const DATEINAME = /^[\w.\/-]*[\w-]\.[a-z][a-z0-9]{0,5}$/i;
+const SPRACHE_ZU_ENDUNG = { javascript: 'js', js: 'js', html: 'html', css: 'css', python: 'py', py: 'py',
+  java: 'java', typescript: 'ts', ts: 'ts', c: 'c', cpp: 'cpp', 'c++': 'cpp', csharp: 'cs', cs: 'cs',
+  ruby: 'rb', go: 'go', rust: 'rs', haskell: 'hs', swift: 'swift', json: 'json', markdown: 'md', md: 'md' };
+
+function dateinameAusInfo(info) {
+  for (const t of String(info || '').split(/[\s:=,]+/)) {
+    const kandidat = t.replace(/^["'`]+|["'`]+$/g, '').replace(/^\.\//, '');
+    if (DATEINAME.test(kandidat)) return kandidat;
   }
-  const andere = [];
-  for (const pfad of Object.keys(vfs)) {
-    if (pfad === bevorzugt || vfs[pfad].binary) continue;
-    const r = applySearchReplace(text, vfs[pfad].content);
-    if (r) andere.push({ ...r, pfad });
-  }
-  return andere.length === 1 ? andere[0] : null;
+  return null;
 }
 
-function applySearchReplace(text, currentContent) {
+function dateinameAusZeile(zeile, sprache) {
+  const m = String(zeile).trim()
+    .match(/^(?:[#>*_\s-]*[^`*\n]{0,40}?\s)?[*_`]*([\w.\/-]+\.[a-z][a-z0-9]{0,5})[*_`]*\s*:?\s*[*_]*$/i);
+  if (!m || !DATEINAME.test(m[1])) return null;
+  // Sprachtag und Endung müssen zusammenpassen — "In style.css:" vor einem ```js-Block ist Prosa.
+  const soll = SPRACHE_ZU_ENDUNG[String(sprache || '').toLowerCase()];
+  const ist = m[1].split('.').pop().toLowerCase().replace(/^htm$/, 'html');
+  return !soll || soll === ist ? m[1].replace(/^\.\//, '') : null;
+}
+
+// Alle Codeblöcke einer Antwort als [ganzerBlock, dateinameOderSprache, code].
+// Fences zählen nur am Zeilenanfang, damit ``` im Fließtext oder in einem Codeblock
+// mit längerem Fence nichts zerschneidet. Ein nicht geschlossener letzter Block
+// zählt mit — sonst landet eine abgeschnittene Antwort komplett im Chat.
+function sammleCodeBloecke(text) {
+  // Ende: schließender Fence, ein neuer Öffner gleicher Länge MIT Bezeichner (Modelle
+  // vergessen das ``` nach dem ersten Block gern) oder das Textende.
+  const re = /^[^\S\n]*(`{3,})[^\S\n]*([^\n`]*)\n([\s\S]*?)(?:^[^\S\n]*\1`*[^\S\n]*$|(?=^[^\S\n]*\1[^\S\n]*[\w.][^\n`]*$)|(?![\s\S]))/gm;
+  const out = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m[0] === '') { re.lastIndex++; continue; }
+    const info = m[2].trim();
+    const sprache = info.split(/[\s:]/)[0] || '';
+    const davor = text.slice(0, m.index).replace(/\s+$/, '').split('\n').pop() || '';
+    const name = dateinameAusInfo(info) || dateinameAusZeile(davor, sprache);
+    out.push([m[0], name || sprache, m[3]]);
+  }
+  return out;
+}
+
+// Zerlegt die Antwort in SEARCH/REPLACE-Blöcke. Jeder Block merkt sich den
+// Dateinamen, falls einer dabeisteht: am umschließenden Fence, hinter dem
+// SEARCH-Marker oder in der Zeile davor. Folgt ein Block direkt auf den
+// vorigen, erbt er dessen Datei.
+function parseSRBlocks(text) {
   const norm = text
     .replace(/\r\n/g, '\n')
     // Llamas verdrehtes Format: ">>>>>>>\n=======" → "======="
@@ -2768,27 +2871,152 @@ function applySearchReplace(text, currentContent) {
 
   // Tolerant: 4–10 Markerzeichen, beliebiger Text hinter SEARCH/REPLACE (Modelle
   // hängen gern den Dateinamen an), Leerzeichen hinter =======, leere Abschnitte.
-  const blockPattern = /^[^\S\n]*<{4,10}[^\S\n]*SEARCH[^\n]*\n([\s\S]*?)^[^\S\n]*={4,10}[^\S\n]*\n([\s\S]*?)^[^\S\n]*>{4,10}[^\S\n]*REPLACE[^\n]*$/gm;
+  const blockPattern = /^[^\S\n]*<{4,10}[^\S\n]*SEARCH([^\n]*)\n([\s\S]*?)^[^\S\n]*={4,10}[^\S\n]*\n([\s\S]*?)^[^\S\n]*>{4,10}[^\S\n]*REPLACE[^\n]*$/gm;
+  const fences = [...norm.matchAll(/^[^\S\n]*```([^\n]*)$/gm)];
 
-  let result = currentContent;
-  let applied = 0, added = 0, removed = 0, blocks = 0;
-  const failed = [];
-  let match;
+  const bloecke = [];
+  let vorigesEnde = -1, vorigerHinweis = null, match;
   while ((match = blockPattern.exec(norm)) !== null) {
-    blocks++;
+    const offen = fences.filter(f => f.index < match.index);
+    const imFence = offen.length % 2 === 1 ? offen[offen.length - 1] : null;
+    let hinweis = dateinameAusInfo(imFence?.[1]) || dateinameAusInfo(match[1]);
+    if (!hinweis) {
+      const start = imFence ? imFence.index : match.index;
+      const zwischen = norm.slice(vorigesEnde, start);
+      if (vorigesEnde >= 0 && /^[\s`]*$/.test(zwischen)) hinweis = vorigerHinweis;
+      else hinweis = dateinameAusZeile(norm.slice(0, start).replace(/\s+$/, '').split('\n').pop() || '');
+    }
     // Modelle erfinden gern Zusatzmarker ("<<<<<<< END" vor dem =======).
     // Marker-artige Zeilen an den Rändern beider Abschnitte entfernen.
-    const search  = strippeRandmarker(match[1].replace(/\n$/, ''));
-    const replace = strippeRandmarker(match[2].replace(/\n$/, ''));
-    const hit = applyOneBlock(result, search, replace);
-    if (hit) {
-      result = hit.content;
-      added += hit.added; removed += hit.removed; applied++;
-    } else {
-      failed.push((search.split('\n').find(l => l.trim()) || '').trim().slice(0, 60));
-    }
+    bloecke.push({
+      search:  strippeRandmarker(match[2].replace(/\n$/, '')),
+      replace: strippeRandmarker(match[3].replace(/\n$/, '')),
+      hinweis,
+    });
+    vorigesEnde = match.index + match[0].length;
+    vorigerHinweis = hinweis;
   }
-  return applied > 0 ? { content: result, count: applied, added, removed, blocks, failed } : null;
+  return bloecke;
+}
+
+// Grobe Einordnung eines Code-Stücks — nur als Entscheidungshilfe bei Mehrdeutigkeit.
+function codeArt(code) {
+  const c = String(code);
+  if (/<\/?[a-z][\w-]*(\s[^>]*)?>/i.test(c) && !/=>|\bfunction\b|\bconst\b/.test(c)) return 'html';
+  if (/^\s*[#.\w\-\[\]:*>, ]+\{\s*$/m.test(c) && /^\s*[\w-]+\s*:\s*[^;{}]+;?\s*$/m.test(c)
+      && !/=>|\bfunction\b|\b(const|let|var)\s|\(\)/.test(c)) return 'css';
+  if (/=>|\bfunction\b|\b(const|let|var)\s|document\.|\w+\(.*\);/.test(c)) return 'js';
+  return null;
+}
+function endungArt(pfad) {
+  const e = (pfad.split('.').pop() || '').toLowerCase();
+  return { html: 'html', htm: 'html', css: 'css', js: 'js', mjs: 'js' }[e] || null;
+}
+
+function loeseHinweisPfad(hinweis, bevorzugt) {
+  if (!hinweis) return null;
+  if (vfs[hinweis]) return hinweis;
+  const dir = bevorzugt && bevorzugt.includes('/') ? bevorzugt.replace(/\/[^/]+$/, '/') : '';
+  if (vfs[dir + hinweis]) return dir + hinweis;
+  const passend = Object.keys(vfs).filter(p => p.endsWith('/' + hinweis));
+  return passend.length === 1 ? passend[0] : null;
+}
+
+// Wendet jeden SEARCH/REPLACE-Block einzeln auf die passende Datei an. Bisher lief
+// die ganze Antwort gegen EINE Datei: Bei einer Änderung über index.html, style.css
+// und script.js kam nur die erste an, und passte die aktive Datei gar nicht, landete
+// die komplette Antwort im Chat.
+// Reihenfolge je Block: genannte Datei → aktive Datei → die eine andere Datei, in der
+// der Text vorkommt. Passt er in mehrere, wird nicht geraten.
+// basisVon(pfad) liefert den Stand, auf den angewendet wird (beim Streaming der
+// Inhalt VOR dem Stream).
+function applySRProjekt(text, bevorzugt, basisVon) {
+  const bloecke = parseSRBlocks(text);
+  if (!bloecke.length) return null;
+  const dateien = new Map();   // pfad → { content, added, removed, count, neu }
+  const inhalt = p => dateien.has(p) ? dateien.get(p).content : basisVon(p);
+  const versuche = (p, b) => {
+    const c = inhalt(p);
+    return (c === null || c === undefined) ? null : applyOneBlock(c, b.search, b.replace);
+  };
+  const failed = [];
+  let count = 0, added = 0, removed = 0;
+
+  for (const b of bloecke) {
+    const genannt = loeseHinweisPfad(b.hinweis, bevorzugt);
+    let ziel = null, hit = null;
+    if (genannt) { hit = versuche(genannt, b); if (hit) ziel = genannt; }
+    if (!hit && b.search === '' && b.hinweis && !genannt) {
+      // Leerer SEARCH-Block für eine Datei, die es noch nicht gibt = neue Datei
+      const dir = bevorzugt && bevorzugt.includes('/') ? bevorzugt.replace(/\/[^/]+$/, '/') : '';
+      ziel = dir + b.hinweis;
+      hit = { content: inhalt(ziel) ? inhalt(ziel) + '\n' + b.replace : b.replace,
+              added: b.replace.split('\n').length, removed: 0 };
+    }
+    if (!hit && bevorzugt && bevorzugt !== genannt && vfs[bevorzugt]) {
+      hit = versuche(bevorzugt, b); if (hit) ziel = bevorzugt;
+    }
+    if (!hit && b.search !== '') {
+      const andere = Object.keys(vfs)
+        .filter(p => p !== genannt && p !== bevorzugt && !vfs[p].binary)
+        .map(p => [p, versuche(p, b)])
+        .filter(([, h]) => h);
+      if (andere.length === 1) [ziel, hit] = andere[0];
+      // Mehrdeutig (z.B. SEARCH nur "}")? Dann entscheidet, wonach der Ersatz aussieht.
+      else if (andere.length > 1) {
+        const art = codeArt(b.replace);
+        const passend = art ? andere.filter(([p]) => endungArt(p) === art) : [];
+        if (passend.length === 1) [ziel, hit] = passend[0];
+      }
+    }
+    if (!hit) {
+      failed.push((b.search.split('\n').find(l => l.trim()) || '').trim().slice(0, 60));
+      continue;
+    }
+    const alt = dateien.get(ziel) || { added: 0, removed: 0, count: 0, neu: !vfs[ziel] };
+    dateien.set(ziel, { ...alt, content: hit.content, added: alt.added + hit.added,
+                        removed: alt.removed + hit.removed, count: alt.count + 1 });
+    count++; added += hit.added; removed += hit.removed;
+  }
+  return count > 0 ? { dateien, count, added, removed, blocks: bloecke.length, failed } : null;
+}
+
+// SEARCH/REPLACE-Blöcke für die Chat-Anzeige in Codeblöcke packen, sonst liest
+// marked.js "=======" als Überschrift. Blöcke, die schon in einem Fence stehen,
+// bleiben, wie sie sind — ein zweiter Fence darum zerreißt die Darstellung.
+function antwortFuerChat(text) {
+  return String(text)
+    .split(/(^[^\S\n]*```[^\n]*\n[\s\S]*?(?:^[^\S\n]*```[^\S\n]*$|(?![\s\S])))/m)
+    .map((teil, i) => i % 2 ? teil : teil.replace(
+      /(^[^\S\n]*<{4,10}[^\S\n]*SEARCH[\s\S]*?^[^\S\n]*>{4,10}[^\S\n]*REPLACE[^\n]*$)/gm, '```\n$1\n```'))
+    .join('');
+}
+
+// Live-Streaming schreibt in die Zieldatei, bevor feststeht, was die Antwort ist.
+// Wird sie am Ende nicht (so) übernommen, muss der alte Stand zurück. Neu angelegte
+// Dateien bleiben stehen — die schreibt die Nachbearbeitung ohnehin.
+function streamZielZuruecksetzen(agent) {
+  const p = agent.srStreamPfad;
+  if (!p || agent.srStreamBase === null || agent.streamCreatedFile || !vfs[p]) return;
+  if (vfs[p].content === agent.srStreamBase) return;
+  vfs[p].content = agent.srStreamBase;
+  vfs[p].model?.setValue(agent.srStreamBase);
+}
+
+// Undo merkt sich je Datei den Stand vor der ersten Änderung dieser Antwort.
+function merkeUndo(agent, path, content) {
+  if (!path || content === undefined || content === null) return;
+  agent.undoSnapshot ??= [];
+  if (!agent.undoSnapshot.some(s => s.path === path)) agent.undoSnapshot.push({ path, content });
+  document.getElementById('undo-btn').classList.add('visible');
+}
+
+// Inhalt setzen; das Monaco-Modell fehlt bei nie geöffneten Dateien — switchTab
+// baut es dann beim Öffnen aus content auf.
+function setzeDatei(path, content) {
+  if (!vfs[path]) { addFile(path, content); return; }
+  vfs[path].content = content;
+  vfs[path].model?.setValue(content);
 }
 
 async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, agent, registerAbort) {
@@ -2849,9 +3077,12 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
       const streamDir = streamTargetTab && streamTargetTab.includes('/') ? streamTargetTab.replace(/\/[^/]+$/, '/') : '';
       if (fenceName && fenceName.includes('.') && (!streamTargetTab || fenceName !== streamTargetTab.split('/').pop())) {
         // New file — create it immediately and switch editor to it for live streaming
+        // Andere Datei als die aktive — gibt es sie schon, ist ihr Inhalt die Basis
+        // (SEARCH/REPLACE im Fence ```style.css), sonst startet sie leer.
         const targetPath = streamDir + fenceName;
-        agent.srStreamBase = ''; // new file starts empty
-        agent.streamCreatedFile = targetPath;
+        const gabEsSchon = !!vfs[targetPath] && !vfs[targetPath].binary;
+        agent.srStreamBase = gabEsSchon ? vfs[targetPath].content : '';
+        agent.streamCreatedFile = gabEsSchon ? null : targetPath;
         streamTargetTab = targetPath; // follow the new file
         if (!vfs[targetPath]) addFile(targetPath, '');
         openTab(targetPath);
@@ -2870,6 +3101,9 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
       } else {
         return; // no target yet
       }
+      // Zu welcher Datei gehört srStreamBase? activeTab kann sich bis zum Ende
+      // noch ändern (Tab-Wechsel während des Streams).
+      agent.srStreamPfad = streamTargetTab;
     }
 
     if (!streamTargetTab || !vfs[streamTargetTab]?.model) return;
@@ -2878,14 +3112,16 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
     requestAnimationFrame(() => {
       rafPending = false;
       if (!vfs[targetPath]?.model) return;
-      if (fullText.includes('<<<<<<< SEARCH')) {
-        // Live-apply each completed SEARCH/REPLACE block as it arrives
+      if (SR_MARKER.test(fullText)) {
+        // Live-apply each completed SEARCH/REPLACE block as it arrives — nur die
+        // Blöcke, die zu dieser Datei gehören; der Rest wird am Ende verteilt.
         if (!srNotified) { srNotified = true; onSRDetected?.(); }
-        const result = applySearchReplace(fullText, agent.srStreamBase);
-        if (result) {
-          agent.srStreamApplied = true;
-          vfs[targetPath].model.setValue(result.content);
-          vfs[targetPath].content = result.content;
+        const result = applySRProjekt(fullText, targetPath,
+          p => p === targetPath ? agent.srStreamBase : vfs[p]?.content);
+        const hier = result?.dateien.get(targetPath);
+        if (hier && hier.content !== vfs[targetPath].content) {
+          vfs[targetPath].model.setValue(hier.content);
+          vfs[targetPath].content = hier.content;
         }
       } else {
         const code = extractStreamingCode(fullText);
@@ -2963,7 +3199,7 @@ async function sendMessage() {
   }
 
   agent.srStreamBase    = null;
-  agent.srStreamApplied = false;
+  agent.srStreamPfad    = null;
   agent.streamCreatedFile = null;
   agent.undoSnapshot    = null;
   document.getElementById('undo-btn').classList.remove('visible');
@@ -3054,6 +3290,7 @@ async function sendMessage() {
   sendBtn.querySelector('i').className = 'fa-solid fa-stop';
 
   const t0 = Date.now();
+  const tabBeimSenden = activeTab;   // Ziel für SEARCH/REPLACE ohne Dateinamen
   try {
   const selectedModel = document.getElementById('model-select').value;
   agent.model = selectedModel;
@@ -3085,10 +3322,7 @@ async function sendMessage() {
     function onStreamStart() {
       if (streamStarted) return;
       streamStarted = true;
-      if (activeTab && vfs[activeTab]?.content !== undefined) {
-        agent.undoSnapshot = { path: activeTab, content: vfs[activeTab].content };
-        document.getElementById('undo-btn').classList.add('visible');
-      }
+      if (activeTab && vfs[activeTab]?.content !== undefined) merkeUndo(agent, activeTab, vfs[activeTab].content);
       clearInterval(phraseInterval);
       const hasContent = activeTab && vfs[activeTab]?.content?.trim();
       const vfsHasFiles = Object.keys(vfs).length > 0;
@@ -3115,10 +3349,7 @@ async function sendMessage() {
         agent.cancelStream = null;
         if (result.text !== undefined) { data = result; break; }
         if (result.aborted) {
-          if (agent.srStreamBase !== null && activeTab && vfs[activeTab]?.model) {
-            vfs[activeTab].content = agent.srStreamBase;
-            vfs[activeTab].model.setValue(agent.srStreamBase);
-          }
+          streamZielZuruecksetzen(agent);
           agent.srStreamBase = null;
           errorHandled = true;
           break;
@@ -3177,31 +3408,31 @@ async function sendMessage() {
       ? 'Alle Modelle der Kette sind ausgefallen. ' + freundlicherFehler(letzterFehler)
       : 'Alle Modelle nicht erreichbar — bitte gleich nochmal versuchen.');
   } else if (data) {
-      // Auto-apply: SEARCH/REPLACE-Blöcke oder (fallback) genau ein Codeblock
-      // Use srStreamBase if streaming already applied blocks (so stats are computed against original)
-      const srBase = agent.srStreamBase !== null ? agent.srStreamBase
-                   : (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
-      const srResult = /<{4,10}[^\S\n]*SEARCH/.test(data.text)
-        ? applySearchReplaceImProjekt(data.text, activeTab, srBase)
+      // Auto-apply: SEARCH/REPLACE-Blöcke (jeder einzeln in die passende Datei) und
+      // Codeblöcke mit Dateinamen — auch beides in derselben Antwort ("about.html
+      // anlegen und auf der Startseite verlinken"). Ohne beides: genau ein Codeblock
+      // für die aktive Datei oder Fragmente, die sich im Code verankern lassen.
+      // Basis ist der Stand VOR dem Streaming — das hat die Zieldatei evtl. schon verändert.
+      const basisVon = p => (p === agent.srStreamPfad && agent.srStreamBase !== null)
+        ? agent.srStreamBase
+        : (vfs[p] && !vfs[p].binary ? vfs[p].content : null);
+      const srBase = activeTab ? basisVon(activeTab) : null;
+      const srResult = SR_MARKER.test(data.text)
+        ? applySRProjekt(data.text, tabBeimSenden && vfs[tabBeimSenden] ? tabBeimSenden : activeTab, basisVon)
         : null;
-      // ── File blocks: collect all code blocks that have a filename as identifier ──
-      // (?:```|$) nimmt auch einen nicht geschlossenen letzten Block mit — sonst landet
-      // eine abgeschnittene Antwort komplett als Rohtext im Chat statt in der Datei.
-      const allBlocks = !srResult ? [...data.text.matchAll(/```([\w./-]*)[ \t]*\n([\s\S]*?)(?:```|$)/g)] : [];
-      const abgeschnitten = ((data.text.match(/```/g) || []).length % 2) === 1;
+      // Codeblöcke, die SEARCH/REPLACE enthalten, sind oben schon verteilt.
+      const allBlocks = sammleCodeBloecke(data.text).filter(m => !SR_MARKER.test(m[2]));
+      const abgeschnitten = ((data.text.match(/^[^\S\n]*```/gm) || []).length % 2) === 1;
       const dir = activeTab && activeTab.includes('/') ? activeTab.replace(/\/[^/]+$/, '/') : '';
-      // A block is a "file block" if its fence identifier contains a dot (= filename)
+      // A block is a "file block" if a filename was found (fence identifier or line before)
       const fileBlocks = allBlocks.filter(m => m[1].includes('.'));
-      // A block targets the active tab if its fence matches the active file's name or language
-      const activeName = activeTab ? activeTab.split('/').pop() : '';
-      const activeLang = activeTab && vfs[activeTab] ? vfs[activeTab].language : '';
-      const activeTabBlock = allBlocks.length === 1 && !fileBlocks.length
+      const activeTabBlock = !srResult && allBlocks.length === 1 && !fileBlocks.length
         ? allBlocks[0]   // single block with language tag → treat as active-file update (or new file if no tab open)
         : null;
       // Fragment-Fallback: Modelle schicken statt SEARCH/REPLACE gern nur den
       // geänderten Ausschnitt ("body { … }"). Solche Blöcke im vorhandenen Code
       // verankern, statt die Antwort ungenutzt im Chat liegen zu lassen.
-      const fragBase = srBase ?? (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
+      const fragBase = srBase;
       const fragResult = (!srResult && !fileBlocks.length && allBlocks.length && fragBase)
         ? applyFragments(fragBase, allBlocks.map(m => m[2].replace(/\n$/, '')))
         : null;
@@ -3210,7 +3441,9 @@ async function sendMessage() {
       let pendingQuip = null;
       if (didAutoApply && !agent.learnMode) {
         const newFileNames = fileBlocks.map(m => m[1]);
-        const fname = newFileNames.length ? newFileNames.join(', ') : (activeTab || 'Datei');
+        const srPfade = srResult ? [...srResult.dateien.keys()] : [];
+        const fname = newFileNames.length ? newFileNames.join(', ')
+                    : srPfade.length ? srPfade.join(', ') : (activeTab || 'Datei');
         const action = (srResult || fragResult) ? 'angepasst' : newFileNames.length ? 'angelegt' : 'erstellt';
         const doneMessages = newFileNames.length ? [
           `${fname} angelegt.`,
@@ -3239,53 +3472,37 @@ async function sendMessage() {
         msgs.appendChild(quipDiv);
         pendingQuip = quipDiv;
       } else {
-        // Streaming may have written partial content into the active file — restore the original
-        if (!agent.streamCreatedFile && agent.srStreamBase !== null && activeTab && vfs[activeTab]?.model) {
-          vfs[activeTab].content = agent.srStreamBase;
-          vfs[activeTab].model.setValue(agent.srStreamBase);
-        }
+        // Streaming may have written partial content into the target file — restore the original
+        streamZielZuruecksetzen(agent);
         const botDiv = document.createElement('div');
         botDiv.className = 'chat-msg bot';
         // Wrap SEARCH/REPLACE blocks in code fences so marked.js doesn't misparse '=======' as a setext heading
-        const safeText = data.text.replace(
-          /(<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE)/g,
-          '```\n$1\n```'
-        );
-        botDiv.innerHTML = marked.parse(safeText);
-        if (/<<<<<<< SEARCH/.test(data.text) && !srResult) {
+        botDiv.innerHTML = marked.parse(antwortFuerChat(data.text));
+        if (SR_MARKER.test(data.text) && !srResult) {
           sysMsgHtml('⚠ Konnte nicht automatisch angewendet werden — Suche fand keine exakte Übereinstimmung.');
         }
         msgs.appendChild(botDiv);
       }
 
       if (srResult) {
-        const srPfad = srResult.pfad || activeTab;
-        // Streaming hat nur in die aktive Datei geschrieben — traf es eine andere,
-        // muss die aktive zurueckgerollt und die richtige beschrieben werden.
-        const andereDatei = srPfad !== activeTab;
-        if (andereDatei && agent.srStreamBase !== null && activeTab && vfs[activeTab]?.model) {
-          vfs[activeTab].content = agent.srStreamBase;
-          vfs[activeTab].model.setValue(agent.srStreamBase);
+        // Live-Streaming hat nur in eine Datei geschrieben, evtl. mit Blöcken, die
+        // gar nicht dorthin gehören — Endstand deshalb immer aus der Basis setzen.
+        if (!srResult.dateien.has(agent.srStreamPfad)) streamZielZuruecksetzen(agent);
+        for (const [pfad, d] of srResult.dateien) {
+          merkeUndo(agent, pfad, d.neu ? '' : basisVon(pfad));
+          setzeDatei(pfad, d.content);
+          sysMsgHtml(`✓ ${d.count} Stelle(n) in ${pfad} ${d.neu ? 'angelegt' : 'aktualisiert'} &nbsp;<span style="color:#4caf50">+${d.added}</span> <span style="color:#f44336">−${d.removed}</span>`);
         }
-        if (!agent.srStreamApplied || andereDatei) {
-          if (!agent.undoSnapshot && vfs[srPfad]?.content !== undefined) {
-            agent.undoSnapshot = { path: srPfad, content: vfs[srPfad].content };
-            document.getElementById('undo-btn').classList.add('visible');
-          }
-          vfs[srPfad].content = srResult.content;
-          // Modell kann noch fehlen (Datei nie geoeffnet) — switchTab baut es dann
-          // beim Oeffnen aus content auf.
-          vfs[srPfad].model?.setValue(srResult.content);
-        }
-        if (andereDatei) { openTab(srPfad); renderTree(); }
-        sysMsgHtml(`✓ ${srResult.count} Stelle(n) in ${srPfad} aktualisiert &nbsp;<span style="color:#4caf50">+${srResult.added}</span> <span style="color:#f44336">−${srResult.removed}</span>`);
+        const srPfade = [...srResult.dateien.keys()];
+        if (!srPfade.includes(activeTab)) openTab(srPfade[0]);
+        renderTree();
         reportSRFailures(srResult);
-      } else if (fileBlocks.length) {
-        // Restore active tab only if streaming wrote into it unintentionally (not a new file we created)
-        if (!agent.streamCreatedFile && agent.srStreamBase !== null && activeTab && vfs[activeTab]?.model) {
-          vfs[activeTab].content = agent.srStreamBase;
-          vfs[activeTab].model.setValue(agent.srStreamBase);
-        }
+      }
+
+      if (fileBlocks.length) {
+        // Restore the stream target only if streaming wrote into it unintentionally
+        // (not a new file we created, not a file SEARCH/REPLACE just wrote)
+        if (!srResult?.dateien.has(agent.srStreamPfad)) streamZielZuruecksetzen(agent);
         // Detect obviously wrong content for a given file extension
         const contentMismatch = (filename, code) => {
           const ext = filename.split('.').pop().toLowerCase();
@@ -3300,82 +3517,52 @@ async function sendMessage() {
         for (const blk of fileBlocks) {
           const newCode = blk[2].replace(/\n$/, '');
           const newLines = (newCode.match(/\n/g) || []).length + 1;
-          const newPath = dir + blk[1];
-          // Guard: model wrapped SEARCH/REPLACE markers inside a file-named fence
-          if (newCode.includes('<<<<<<< SEARCH')) {
-            const innerBase = srBase || (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
-            const innerResult = innerBase ? applySearchReplace(newCode, innerBase) : null;
-            if (innerResult) {
-              vfs[activeTab].content = innerResult.content;
-              vfs[activeTab].model.setValue(innerResult.content);
-              lastPath = activeTab;
-              sysMsgHtml(`✓ ${innerResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${innerResult.added}</span> <span style="color:#f44336">−${innerResult.removed}</span>`);
-              reportSRFailures(innerResult);
-            } else {
-              sysMsgHtml(`⚠ <b>${blk[1]}</b> — SEARCH-Text nicht gefunden (Datei evtl. zu groß für Kontext). Antwort oben anzeigen und manuell übernehmen.`);
-            }
-            continue;
-          }
           const mismatch = contentMismatch(blk[1], newCode);
           if (mismatch) {
             sysMsgHtml(`⚠ <b>${blk[1]}</b> übersprungen — Modell hat falschen Inhalt generiert (${mismatch}). Bitte nochmal versuchen oder anderes Modell wählen.`);
             continue;
           }
           const isActiveFile = activeTab && blk[1] === activeTab.split('/').pop();
-          const zielPfad = isActiveFile ? activeTab : newPath;
+          // Vorhandene Datei bevorzugen ("script.js" → "js/script.js"), statt eine Kopie anzulegen
+          const zielPfad = isActiveFile ? activeTab : (loeseHinweisPfad(blk[1], activeTab) || dir + blk[1]);
+          const gabEsSchon = !!vfs[zielPfad] && (vfs[zielPfad].content || '').trim() !== '';
           const teil = partialOverwriteGuard(zielPfad, newCode, agent);
           if (teil) {
             // Teil-Ausgabe muss kein Verlust sein: manche Modelle schicken den
             // geänderten Ausschnitt in einer Fence MIT Dateinamen. Erst verankern,
             // erst wenn das scheitert die Datei in Ruhe lassen.
-            const verankert = applyFragments(teil.vorher, [newCode]);
+            const verankert = bringeFragmentUnter(zielPfad, teil.vorher, newCode);
             if (verankert) {
-              vfs[zielPfad].content = verankert.content;
-              vfs[zielPfad].model?.setValue(verankert.content);
+              merkeUndo(agent, zielPfad, teil.vorher);
+              setzeDatei(zielPfad, verankert.content);
               lastPath = zielPfad;
-              sysMsgHtml(`✓ ${verankert.count} Block/Blöcke in ${zielPfad} eingesetzt &nbsp;<span style="color:#4caf50">+${verankert.added}</span> <span style="color:#f44336">−${verankert.removed}</span>`);
+              sysMsgHtml(`✓ ${verankert.count} Block/Blöcke in ${zielPfad} ${verankert.art} &nbsp;<span style="color:#4caf50">+${verankert.added}</span> <span style="color:#f44336">−${verankert.removed}</span>`);
               reportSRFailures(verankert);
               continue;
             }
-            if (vfs[zielPfad]?.model && vfs[zielPfad].content !== teil.vorher) {
-              vfs[zielPfad].content = teil.vorher;
-              vfs[zielPfad].model.setValue(teil.vorher);
-            }
+            if (vfs[zielPfad] && vfs[zielPfad].content !== teil.vorher) setzeDatei(zielPfad, teil.vorher);
             sysMsgHtml(`⚠ <b>${zielPfad}</b> übersprungen — Modell hat nur einen Teil ausgegeben (${teil.newLines} von ${teil.oldLines} Zeilen). Datei wurde <b>nicht</b> überschrieben.`);
             continue;
           }
-          if (isActiveFile) {
-            if (vfs[activeTab]?.model) {
-              vfs[activeTab].content = newCode;
-              vfs[activeTab].model.setValue(newCode);
-            }
-            lastPath = activeTab;
-            sysMsgHtml(`✓ <b>${activeTab}</b> aktualisiert &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
-            if (abgeschnitten) sysMsgHtml('⚠ Die Antwort des Modells war abgeschnitten — die Datei ist womöglich unvollständig. Schreib „mach weiter" oder wähle oben ein anderes Modell.');
-          } else {
-            addFile(newPath, newCode);
-            lastPath = newPath;
-            sysMsgHtml(`✓ <b>${newPath}</b> ${vfs[newPath] ? 'aktualisiert' : 'angelegt'} &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
-          }
+          if (gabEsSchon) merkeUndo(agent, zielPfad, basisVon(zielPfad));
+          setzeDatei(zielPfad, newCode);
+          lastPath = zielPfad;
+          sysMsgHtml(`✓ <b>${zielPfad}</b> ${gabEsSchon ? 'aktualisiert' : 'angelegt'} &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
+          if (abgeschnitten && blk === fileBlocks[fileBlocks.length - 1]) sysMsgHtml('⚠ Die Antwort des Modells war abgeschnitten — die Datei ist womöglich unvollständig. Schreib „mach weiter" oder wähle oben ein anderes Modell.');
         }
         if (lastPath) {
           openTab(lastPath); renderTree();
-        } else if (pendingQuip) {
+        } else if (pendingQuip && !srResult) {
           // All file blocks failed — remove the premature quip and show the bot response instead
           msgs.removeChild(pendingQuip);
           const botDiv = document.createElement('div');
           botDiv.className = 'chat-msg bot';
-          const safeText = data.text.replace(/(<<<<<<< SEARCH[\s\S]*?>>>>>>> REPLACE)/g, '```\n$1\n```');
-          botDiv.innerHTML = marked.parse(safeText);
+          botDiv.innerHTML = marked.parse(antwortFuerChat(data.text));
           msgs.appendChild(botDiv);
         }
       } else if (fragResult) {
-        if (!agent.undoSnapshot && activeTab && vfs[activeTab]?.content !== undefined) {
-          agent.undoSnapshot = { path: activeTab, content: fragBase };
-          document.getElementById('undo-btn').classList.add('visible');
-        }
-        vfs[activeTab].content = fragResult.content;
-        vfs[activeTab].model.setValue(fragResult.content);
+        merkeUndo(agent, activeTab, fragBase);
+        setzeDatei(activeTab, fragResult.content);
         sysMsgHtml(`✓ ${fragResult.count} Block/Blöcke in ${activeTab} eingesetzt &nbsp;<span style="color:#4caf50">+${fragResult.added}</span> <span style="color:#f44336">−${fragResult.removed}</span>`);
         reportSRFailures(fragResult);
       } else if (activeTabBlock) {
@@ -3391,42 +3578,24 @@ async function sendMessage() {
           openTab(newPath); renderTree();
         }
         const newCode = activeTabBlock[2].replace(/\n$/, '');
-        // Guard: if the code block contains SEARCH/REPLACE markers, the model wrapped them in a
-        // fence instead of outputting them bare. Try to apply as SEARCH/REPLACE first.
-        if (newCode.includes('<<<<<<< SEARCH')) {
-          // Restore original content if streaming partially wrote the file
-          if (agent.srStreamBase !== null && !agent.srStreamApplied && activeTab && vfs[activeTab]?.model) {
-            vfs[activeTab].content = agent.srStreamBase;
-            vfs[activeTab].model.setValue(agent.srStreamBase);
-          }
-          const innerBase = srBase || (activeTab && vfs[activeTab] ? vfs[activeTab].content : null);
-          const innerResult = innerBase ? applySearchReplace(newCode, innerBase) : null;
-          if (innerResult) {
-            vfs[activeTab].content = innerResult.content;
-            vfs[activeTab].model.setValue(innerResult.content);
-            sysMsgHtml(`✓ ${innerResult.count} Stelle(n) in ${activeTab} aktualisiert &nbsp;<span style="color:#4caf50">+${innerResult.added}</span> <span style="color:#f44336">−${innerResult.removed}</span>`);
-            reportSRFailures(innerResult);
-          } else {
-            sysMsgHtml('⚠ Konnte nicht automatisch angewendet werden — Suche fand keine exakte Übereinstimmung.');
-          }
-        } else {
-          const newLines = (newCode.match(/\n/g) || []).length + 1;
-          // Vergleichsbasis ist der Stand VOR dem Streaming — vfs[activeTab].content
-          // wurde beim Live-Streaming bereits überschrieben und würde das Fragment
-          // mit sich selbst vergleichen (Wächter greift dann nie).
-          const teil = activeTab ? partialOverwriteGuard(activeTab, newCode, agent) : null;
-          if (teil) {
-            // Streaming hat das Fragment schon in den Editor geschrieben — zurückrollen.
-            if (vfs[activeTab]?.model && vfs[activeTab].content !== teil.vorher) {
-              vfs[activeTab].content = teil.vorher;
-              vfs[activeTab].model.setValue(teil.vorher);
-            }
-            sysMsgHtml(`⚠ Modell hat nur einen Teil ausgegeben (${teil.newLines} von ${teil.oldLines} Zeilen) — Datei wurde <b>nicht</b> überschrieben. Bitte SEARCH/REPLACE verwenden oder Änderung manuell einfügen.`);
-          } else if (activeTab && vfs[activeTab]) {
-            vfs[activeTab].content = newCode;
-            vfs[activeTab].model.setValue(newCode);
-            sysMsgHtml(`✓ ${activeTab} wurde aktualisiert &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
-          }
+        const newLines = (newCode.match(/\n/g) || []).length + 1;
+        // Vergleichsbasis ist der Stand VOR dem Streaming — vfs[activeTab].content
+        // wurde beim Live-Streaming bereits überschrieben und würde das Fragment
+        // mit sich selbst vergleichen (Wächter greift dann nie).
+        const teil = activeTab ? partialOverwriteGuard(activeTab, newCode, agent) : null;
+        const untergebracht = teil ? bringeFragmentUnter(activeTab, teil.vorher, newCode) : null;
+        if (untergebracht) {
+          merkeUndo(agent, activeTab, teil.vorher);
+          setzeDatei(activeTab, untergebracht.content);
+          sysMsgHtml(`✓ ${untergebracht.count} Block/Blöcke in ${activeTab} ${untergebracht.art} &nbsp;<span style="color:#4caf50">+${untergebracht.added}</span> <span style="color:#f44336">−${untergebracht.removed}</span>`);
+        } else if (teil) {
+          // Streaming hat das Fragment schon in den Editor geschrieben — zurückrollen.
+          if (vfs[activeTab] && vfs[activeTab].content !== teil.vorher) setzeDatei(activeTab, teil.vorher);
+          sysMsgHtml(`⚠ Modell hat nur einen Teil ausgegeben (${teil.newLines} von ${teil.oldLines} Zeilen) — Datei wurde <b>nicht</b> überschrieben. Bitte SEARCH/REPLACE verwenden oder Änderung manuell einfügen.`);
+        } else if (activeTab && vfs[activeTab]) {
+          setzeDatei(activeTab, newCode);
+          sysMsgHtml(`✓ ${activeTab} wurde aktualisiert &nbsp;<span style="color:#4caf50">+${newLines}</span>`);
+          if (abgeschnitten) sysMsgHtml('⚠ Die Antwort des Modells war abgeschnitten — die Datei ist womöglich unvollständig. Schreib „mach weiter" oder wähle oben ein anderes Modell.');
         }
       }
 
