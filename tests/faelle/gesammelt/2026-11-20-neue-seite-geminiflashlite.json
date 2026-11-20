@@ -1,0 +1,38 @@
+{
+  "titel": "Neue Seite anlegen und verlinken — Gemini 3.1 Flash Lite",
+  "quelle": "echt, gemini-3.1-flash-lite (google) via sammler.mjs, 2026-11-20",
+  "dateien": {
+    "index.html": "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Zähler</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1>Mein Zähler</h1>\n  <p id=\"anzeige\">0</p>\n  <button id=\"plus\">+1</button>\n  <script src=\"script.js\"></script>\n</body>\n</html>",
+    "style.css": "body {\n  font-family: sans-serif;\n  background: #f0f0f0;\n  text-align: center;\n}\n\nh1 {\n  color: navy;\n}\n\nbutton {\n  font-size: 2rem;\n  padding: 10px 20px;\n}",
+    "script.js": "let zaehler = 0;\nconst anzeige = document.getElementById('anzeige');\nconst plus = document.getElementById('plus');\n\nplus.addEventListener('click', () => {\n  zaehler++;\n  anzeige.textContent = zaehler;\n});"
+  },
+  "offen": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "aktiv": "index.html",
+  "modell": "geminiflashlite",
+  "nurDiesesModell": true,
+  "frage": "Leg eine Seite kontakt.html mit meiner E-Mail-Adresse an und verlinke sie auf der Startseite",
+  "erwartet": {
+    "dateien": {
+      "kontakt.html": {
+        "nichtLeer": true,
+        "regex": [
+          "@"
+        ]
+      },
+      "index.html": {
+        "regex": [
+          "href=[\"']\\.?/?kontakt\\.html"
+        ]
+      }
+    }
+  },
+  "antworten": [
+    {
+      "text": "```kontakt.html\n<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Kontakt</title>\n</head>\n<body>\n  <h1>Kontakt</h1>\n  <p>E-Mail: beispiel@schule.de</p>\n  <a href=\"index.html\">Zurück zur Startseite</a>\n</body>\n</html>\n```\n\n```index.html\n<<<<<<< SEARCH\n  <p id=\"anzeige\">0</p>\n  <button id=\"plus\">+1</button>\n  <script src=\"script.js\"></script>\n=======\n  <p id=\"anzeige\">0</p>\n  <button id=\"plus\">+1</button>\n  <p><a href=\"kontakt.html\">Kontakt</a></p>\n  <script src=\"script.js\"></script>\n>>>>>>> REPLACE\n```\n\nDie Kontaktseite wurde erstellt und ein Link auf der Startseite hinzugefügt."
+    }
+  ]
+}

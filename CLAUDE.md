@@ -26,7 +26,12 @@ LMG Code/
 │   └── lib/config.mjs    # models.json laden, Ketten ableiten, .env.local lesen
 ├── tests/
 │   ├── replay.mjs        # Replay-Harness: gespeicherte Modellantworten durch die echte Pipeline
-│   ├── faelle/*.json     # Testfälle (Projekt vorher, Frage, Antwort(en), Erwartung)
+│   ├── sammler.mjs       # holt echte Antworten aller Modelle und legt sie als Fälle ab
+│   ├── sammler/aufgaben.mjs  # Aufgabenkatalog des Sammlers (Projekt, Frage, lockere Erwartung)
+│   ├── lib/harness.mjs   # gemeinsamer Kern: Server, Browser, fuehreAus(), pruefe()
+│   ├── faelle/*.json     # handgeschriebene Fälle (Projekt vorher, Frage, Antwort(en), Erwartung)
+│   ├── faelle/gesammelt/ # echte Antworten, live + Replay grün — Teil von npm test
+│   ├── faelle/pruefen/   # echte Antworten mit Befund — von Hand klären, nicht in npm test
 │   └── package.json      # nur playwright (devDependency) — nicht im Root, nicht deployt (.vercelignore)
 └── Logo LMG Code.jpg     # App-Logo (wird im Header angezeigt)
 ```
@@ -107,6 +112,26 @@ Einmalig vorher `cd tests && npm install`. Nutzt das installierte Google Chrome 
 - **Ein Fall** (`faelle/NN-name.json`): `dateien` (Projekt vorher), `offen`, `aktiv`, `modell`, `frage`, `antworten` (eine pro Kettenglied: `{text, chunk?, pause?, ohneDone?, abbruchNach?, sseFehler?}` oder `{status, error, retryable?}`) und `erwartet` (`dateien.<pfad>.{enthaelt, enthaeltNicht, vorkommen, unveraendert, gleich, fehlt, nichtLeer}`, `requests` = exakte Modellfolge, `keinCodeImChat` (Standard: an), `chatEnthaelt`, `keineNeuenDateien`, `aktiv`).
 - Immer geprüft: kein JS-Fehler, `vfs.content` = Monaco-Modell, keine Requests über die hinterlegten Antworten hinaus.
 - **Neuer Bug aus dem Unterricht → zuerst als Fall anlegen** (echte Modellantwort reinkopieren), rot sehen, dann fixen. Fälle 01–17 sind die Muster aus diesem Abschnitt, nachgebaut.
+
+- Rote Meldungen sind in **[App]** (Invariante verletzt: Code im Chat, Datei geleert, `<!DOCTYPE>`/`<head>` verloren, `vfs` ≠ Monaco, JS-Fehler — liegt sicher an der App) und Inhalt (Erwartung nicht erfüllt — Modell *oder* App) getrennt.
+
+### Sammler (`tests/sammler.mjs`)
+
+Holt **echte** Antworten: jede Aufgabe aus `sammler/aufgaben.mjs` × jedes Modell, live durch die App und das echte `api/chat.js` (Keys aus `.env.local`, nicht über Vercel). Pro Modell genau ein Versuch, **ohne Fallback-Kette** (`nurDiesesModell`). Die mitgeschnittene Antwort wird als Fall gespeichert und sofort per Replay gegengeprüft:
+
+- live + Replay grün → `faelle/gesammelt/` (ab dann Regressionstest)
+- sonst → `faelle/pruefen/` mit `befund` im Fall. Symbol **A** = App-Invariante (Bug!), **M** = Erwartung nicht erfüllt (Modell oder zu strenge Erwartung), **T** = nur live rot, im Replay grün (Timing im Streaming).
+- Nicht erreichbare Modelle (429/503/404) werden **nicht** gespeichert, nur gemeldet — daran sieht man nebenbei kaputte Modelle.
+
+```bash
+cd tests && node sammler.mjs --trocken                       # zeigt Anzahl Anfragen
+cd tests && node sammler.mjs                                  # alles: 7 Aufgaben × 8 Modelle = 56 Anfragen
+cd tests && node sammler.mjs --modelle qwen,gemma --aufgaben reset
+```
+
+Sperrt sich **Mo–Fr 7:30–15:30** (Unterricht teilt sich das Kontingent), außer mit `--trotzdem`. 4 s Pause zwischen Anfragen (`--pause`). Ein voller Lauf kostet 21 der 1.000 OpenRouter-Anfragen/Tag. Fälle aus `pruefen/` ansehen: `node replay.mjs --pruefen --ausgabe <name>`; ist es ein Modellproblem, Datei löschen; ist es ein App-Bug, fixen und den Fall nach `gesammelt/` verschieben. Erwartungen in `aufgaben.mjs` bewusst locker (Regex) halten, sonst landen gute Antworten in `pruefen/`.
+
+**Erster Lauf (2026-11-20):** North Mini Code ist auf OpenRouter weg (HTTP 404 „no provider serves this model anymore"). Weil `streamOpenRouter()` alles außer 429/503 als fatal markiert, **bricht die Fallback-Kette an North ab**, statt zum nächsten Modell zu gehen — fällt Gemini Flash Lite aus, sehen Schüler eine Fehlermeldung.
 
 **Erster Fund (2026-11-20):** Kommen letzter Chunk und `[DONE]` im selben Frame an, feuerte der noch ausstehende `requestAnimationFrame` des Live-Streamings *nach* dem finalen Anwenden und schrieb den rohen Ausschnitt zurück — bei North-`<body>`-Antworten blieb von `index.html` nur der Body übrig. `fetchStream()` bricht den Frame jetzt bei jedem Stream-Ende ab (`stoppeLiveUpdate()`). Der Fake-Stream pausiert deshalb standardmäßig nur 2 ms zwischen Chunks — genau dieses Timing deckt den Fehler auf; mit 30 ms war er unsichtbar.
 
