@@ -1,32 +1,14 @@
 {
   "_hinweis": "EINZIGE QUELLE DER WAHRHEIT für alle Modelle. Nicht von Hand in index.html/api/chat.js/api/sanity.js/about.html editieren — stattdessen hier ändern und danach 'node scripts/sync-models.mjs' laufen lassen. 'node scripts/update-models.mjs' prüft die Provider-Kataloge und aktualisiert diese Datei automatisch.",
-  "defaultModel": "geminiflashlite",
+  "defaultModel": "geminiflashlite35",
   "maxChainLength": 5,
   "models": [
-    {
-      "key": "geminiflashlite",
-      "label": "Gemini 3.1 Flash Lite",
-      "provider": "google",
-      "id": "gemini-3.1-flash-lite",
-      "rank": 1,
-      "hotkey": "5",
-      "plan": false,
-      "chain": [
-        "geminiflashlite",
-        "geminiflashlite35",
-        "nemotronultra",
-        "nemotron",
-        "gemma"
-      ],
-      "_notiz": "Kette: zuerst das andere Flash Lite (eigenes Google-Kontingent, gleich schnell), dann anderer Provider.",
-      "kurz": "Lite 3.1"
-    },
     {
       "key": "geminiflashlite35",
       "label": "Gemini 3.5 Flash Lite",
       "provider": "google",
       "id": "gemini-3.5-flash-lite",
-      "rank": 1.5,
+      "rank": 1,
       "plan": false,
       "_notiz": "Eigenes Free-Tier-Kontingent (15 RPM, 500 RPD), getrennt von 3.1 Flash Lite — verdoppelt die Google-Kapazitaet im Unterricht.",
       "chain": [
@@ -38,6 +20,24 @@
       ],
       "hotkey": "7",
       "kurz": "Lite 3.5"
+    },
+    {
+      "key": "geminiflashlite",
+      "label": "Gemini 3.1 Flash Lite",
+      "provider": "google",
+      "id": "gemini-3.1-flash-lite",
+      "rank": 1.5,
+      "hotkey": "5",
+      "plan": false,
+      "chain": [
+        "geminiflashlite",
+        "geminiflashlite35",
+        "nemotronultra",
+        "nemotron",
+        "gemma"
+      ],
+      "_notiz": "Kette: zuerst das andere Flash Lite (eigenes Google-Kontingent, gleich schnell), dann anderer Provider.",
+      "kurz": "Lite 3.1"
     },
     {
       "key": "geminiflash",

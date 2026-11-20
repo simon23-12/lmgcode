@@ -3,16 +3,16 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // <models:maps>
 // AUTO-GENERIERT aus models.json — nicht von Hand ändern (node scripts/sync-models.mjs)
 const GOOGLE_MODELS = {
-  geminiflashlite:   "gemini-3.1-flash-lite",
   geminiflashlite35: "gemini-3.5-flash-lite",
+  geminiflashlite:   "gemini-3.1-flash-lite",
   geminiflash:       "gemini-3.6-flash",
   gemma:             "gemma-4-31b-it",
 };
 
 // Sentinel bei Google-Modellen: der Key selbst (echte ID steht in GOOGLE_MODELS).
 const MODEL_MAP = {
-  geminiflashlite:   'geminiflashlite',
   geminiflashlite35: 'geminiflashlite35',
+  geminiflashlite:   'geminiflashlite',
   geminiflash:       'geminiflash',
   nemotronultra:     'nvidia/nemotron-3-ultra-550b-a55b:free',
   nemotron:          'nvidia/nemotron-3.5-super-vl:free',
@@ -29,13 +29,13 @@ const MAX_TOKENS = {
   'openai/gpt-oss-120b': 65536,
 };
 
-const GOOGLE_TARGETS = new Set(['geminiflashlite', 'geminiflashlite35', 'geminiflash', 'gemma']);
+const GOOGLE_TARGETS = new Set(['geminiflashlite35', 'geminiflashlite', 'geminiflash', 'gemma']);
 const GROQ_TARGETS   = new Set(['qwen/qwen3.8-27b', 'openai/gpt-oss-120b']);
 
 function isGoogleModel(target) { return GOOGLE_TARGETS.has(target); }
 function isGroqModel(target)   { return GROQ_TARGETS.has(target); }
 
-const DEFAULT_MODEL = 'geminiflashlite';
+const DEFAULT_MODEL = 'geminiflashlite35';
 // </models:maps>
 
 export default async function handler(req, res) {

@@ -39,5 +39,6 @@
       "geminiflashlite"
     ]
   },
-  "quelle": "handgeschrieben nach Mustern aus CLAUDE.md (2026-11-20)"
+  "quelle": "handgeschrieben nach Mustern aus CLAUDE.md (2026-11-20)",
+  "modell": "geminiflashlite"
 }

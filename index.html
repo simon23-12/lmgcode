@@ -418,8 +418,8 @@
           <i class="fa-solid fa-robot"></i>
           <select id="model-select" title="Modell wählen">
             <!-- models:dropdown -->
-            <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
-            <option value="geminiflashlite35">Gemini 3.5 Flash Lite</option>
+            <option value="geminiflashlite35" selected>Gemini 3.5 Flash Lite</option>
+            <option value="geminiflashlite">Gemini 3.1 Flash Lite</option>
             <option value="geminiflash">Gemini 3.6 Flash</option>
             <option value="nemotronultra">Nemotron 3 Ultra</option>
             <option value="nemotron">Nemotron 3.5 Super</option>
@@ -482,11 +482,11 @@
 // ── 0. Modelle (aus models.json generiert) ──────────────────────────────────
 // <models:maps>
 // AUTO-GENERIERT aus models.json — nicht von Hand ändern (node scripts/sync-models.mjs)
-const DEFAULT_MODEL = 'geminiflashlite';
+const DEFAULT_MODEL = 'geminiflashlite35';
 
 const SLASH_MODEL_NAMES = {
-  geminiflashlite:   'Gemini 3.1 Flash Lite',
   geminiflashlite35: 'Gemini 3.5 Flash Lite',
+  geminiflashlite:   'Gemini 3.1 Flash Lite',
   geminiflash:       'Gemini 3.6 Flash',
   nemotronultra:     'Nemotron 3 Ultra',
   nemotron:          'Nemotron 3.5 Super',
@@ -500,15 +500,15 @@ const MODEL_HOTKEYS = { '1': 'nemotronultra', '2': 'gptoss', '3': 'nemotron', '4
 const MODEL_HOTKEY_HINT = '1&nbsp;Ultra&nbsp;&nbsp;2&nbsp;GPT-OSS&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Lite 3.1&nbsp;&nbsp;6&nbsp;Qwen3.8-27&nbsp;&nbsp;7&nbsp;Lite 3.5';
 
 const FALLBACK_CHAINS = {
-  geminiflashlite:   ['geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron', 'gemma'],
   geminiflashlite35: ['geminiflashlite35', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
+  geminiflashlite:   ['geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron', 'gemma'],
   geminiflash:       ['geminiflash', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
-  nemotronultra:     ['nemotronultra', 'geminiflashlite', 'geminiflashlite35', 'nemotron', 'gemma'],
-  nemotron:          ['nemotron', 'geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'gemma'],
-  gemma:             ['gemma', 'nemotronultra', 'geminiflashlite', 'geminiflashlite35', 'nemotron'],
-  qwen:              ['qwen', 'geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron'],
-  gptoss:            ['gptoss', 'geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron'],
-  free:              ['free', 'geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron'],
+  nemotronultra:     ['nemotronultra', 'geminiflashlite35', 'geminiflashlite', 'nemotron', 'gemma'],
+  nemotron:          ['nemotron', 'geminiflashlite35', 'geminiflashlite', 'nemotronultra', 'gemma'],
+  gemma:             ['gemma', 'nemotronultra', 'geminiflashlite35', 'geminiflashlite', 'nemotron'],
+  qwen:              ['qwen', 'geminiflashlite35', 'geminiflashlite', 'nemotronultra', 'nemotron'],
+  gptoss:            ['gptoss', 'geminiflashlite35', 'geminiflashlite', 'nemotronultra', 'nemotron'],
+  free:              ['free', 'geminiflashlite35', 'geminiflashlite', 'nemotronultra', 'nemotron'],
 };
 
 // Think → Code: diese Modelle bekommen bei komplexen Prompts erst eine Planungsanfrage.
@@ -2633,7 +2633,7 @@ function bringeFragmentUnter(pfad, vorher, code) {
 // (gemessen: 29 Zeilen gegen 218). Einmal pro Agent darauf hinweisen, statt die
 // tausend kleinen Edits über das geteilte OpenRouter-Kontingent zu schicken.
 const BAU_WOERTER = /\b(bau|baue|schreib|schreibe|erstell|erstelle|mach|programmier|programmiere|implementier|entwickle|build|make|create|write|code)\b/i;
-const SCHWACH_BEI_NEUBAU = new Set(['geminiflashlite', 'gemma', 'gptoss', 'qwen']);
+const SCHWACH_BEI_NEUBAU = new Set(['geminiflashlite', 'geminiflashlite35', 'gemma', 'gptoss', 'qwen']);
 
 function neubauHinweis(text, agent) {
   if (agent.neubauHinweisGezeigt) return;
