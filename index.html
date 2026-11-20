@@ -3071,6 +3071,12 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
 
   let fullText = '';
   let rafPending = false;
+  let rafId = null;
+  // Ein noch ausstehender Frame darf nach Stream-Ende nicht mehr feuern: Er käme
+  // NACH dem finalen Anwenden in sendMessage() und schriebe den rohen Stream-
+  // Ausschnitt zurück in die Datei (z.B. nur <body>…</body> statt der ganzen Seite).
+  // Passiert, wenn letzter Chunk und [DONE] im selben Frame ankommen.
+  const stoppeLiveUpdate = () => { if (rafId !== null) cancelAnimationFrame(rafId); rafId = null; rafPending = false; };
   let gotDone = false;
   let streamUsage = null;
   let srNotified = false;
@@ -3123,8 +3129,9 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
     if (!streamTargetTab || !vfs[streamTargetTab]?.model) return;
     const targetPath = streamTargetTab;
     rafPending = true;
-    requestAnimationFrame(() => {
+    rafId = requestAnimationFrame(() => {
       rafPending = false;
+      rafId = null;
       if (!vfs[targetPath]?.model) return;
       if (SR_MARKER.test(fullText)) {
         // Live-apply each completed SEARCH/REPLACE block as it arrives — nur die
@@ -3166,7 +3173,7 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
         if (payload === '[DONE]') { gotDone = true; break outer; }
         try {
           const parsed = JSON.parse(payload);
-          if (parsed.error) return normalisiereStreamFehler(parsed);
+          if (parsed.error) { stoppeLiveUpdate(); return normalisiereStreamFehler(parsed); }
           if (parsed.usage) streamUsage = parsed.usage;
           const delta = parsed.choices?.[0]?.delta?.content ?? '';
           if (delta) {
@@ -3178,9 +3185,10 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
       }
     }
   } catch (err) {
-    if (err.name !== 'AbortError') throw err;
+    if (err.name !== 'AbortError') { stoppeLiveUpdate(); throw err; }
   }
   clearTimeout(firstTokenTimer);
+  stoppeLiveUpdate();
 
   // Stream ended without [DONE] and no content → retryable (Vercel/model timeout)
   if (!gotDone && !fullText) return { error: 'Timeout', retryable: true };

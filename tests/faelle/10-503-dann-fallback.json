@@ -1,0 +1,47 @@
+{
+  "titel": "HTTP 503 und 500 sind retryable, drittes Modell antwortet",
+  "dateien": {
+    "index.html": "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Zähler</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1>Mein Zähler</h1>\n  <p id=\"anzeige\">0</p>\n  <button id=\"plus\">+1</button>\n  <script src=\"script.js\"></script>\n</body>\n</html>",
+    "style.css": "body {\n  font-family: sans-serif;\n  background: #f0f0f0;\n  text-align: center;\n}\n\nh1 {\n  color: navy;\n}\n\nbutton {\n  font-size: 2rem;\n  padding: 10px 20px;\n}",
+    "script.js": "let zaehler = 0;\nconst anzeige = document.getElementById('anzeige');\nconst plus = document.getElementById('plus');\n\nplus.addEventListener('click', () => {\n  zaehler++;\n  anzeige.textContent = zaehler;\n  anzeige.style.color = 'yellow';\n});"
+  },
+  "offen": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "aktiv": "script.js",
+  "frage": "Zähle in Zweierschritten",
+  "antworten": [
+    {
+      "status": 503,
+      "error": "The model is overloaded",
+      "retryable": true
+    },
+    {
+      "status": 500,
+      "error": "FUNCTION_INVOCATION_FAILED"
+    },
+    {
+      "text": "```javascript\n<<<<<<< SEARCH\n  zaehler++;\n=======\n  zaehler += 2;\n>>>>>>> REPLACE\n```"
+    }
+  ],
+  "erwartet": {
+    "dateien": {
+      "script.js": {
+        "enthaelt": [
+          "zaehler += 2;"
+        ],
+        "enthaeltNicht": [
+          "zaehler++"
+        ]
+      }
+    },
+    "requests": [
+      "geminiflashlite",
+      "north",
+      "nemotron"
+    ]
+  },
+  "quelle": "handgeschrieben nach Mustern aus CLAUDE.md (2026-11-20)"
+}

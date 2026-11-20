@@ -1,0 +1,7 @@
+{
+  "name": "lmgcode-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node replay.mjs" },
+  "devDependencies": { "playwright": "^1.56.0" }
+}

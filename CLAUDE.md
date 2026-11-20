@@ -24,6 +24,10 @@ LMG Code/
 │   ├── sync-models.mjs   # models.json → generierte Blöcke in allen Dateien
 │   ├── sanity.mjs        # 1-Token-Live-Test aller Modelle (CLI)
 │   └── lib/config.mjs    # models.json laden, Ketten ableiten, .env.local lesen
+├── tests/
+│   ├── replay.mjs        # Replay-Harness: gespeicherte Modellantworten durch die echte Pipeline
+│   ├── faelle/*.json     # Testfälle (Projekt vorher, Frage, Antwort(en), Erwartung)
+│   └── package.json      # nur playwright (devDependency) — nicht im Root, nicht deployt (.vercelignore)
 └── Logo LMG Code.jpg     # App-Logo (wird im Header angezeigt)
 ```
 
@@ -89,7 +93,22 @@ Daraus folgt zweierlei, was beim GitHub-Import lange falsch war:
 
   **Abgerissener Stream (2026-11-19):** Der Rest des „Code im Chat"-Problems bei Gemini kam nicht aus dem Parser — 28 echte Gemini-Antworten (Flash Lite, 3.6 Flash; kleine und 190-Zeilen-Projekte, Folgefragen, neue Seiten) landeten alle korrekt in der Datei. Er kam aus `api/chat.js`: Bricht Googles Stream mittendrin ab (`Failed to parse stream`), lässt das SDK zusätzlich `result.response` scheitern; unbehandelt killte das den Prozess. Der Browser bekam eine Antwort ohne `[DONE]`, nahm sie als fertig, wendete den ersten Block an (halbe Änderung) und zeigte den Code des offenen Blocks als „Prosa" im Chat. Jetzt: `result.response.catch()` im Backend, Google-Fehler sind nur bei 400/401/403/404 fatal (`googleFehlerIstFatal()`), HTTP 500/502/504 sind im Frontend retryable, ein Stream ohne `[DONE]` mit offenem SEARCH-Block (`hatOffenenSRBlock()`) geht ans nächste Modell, und zwischen den Kettengliedern bzw. ohne Ergebnis wird die Live-Änderung zurückgerollt.
 
-  Test-Rezept: im Browser `window.fetch` für `/api/chat` durch einen Fake-SSE-Stream mit gespeicherten Modellantworten ersetzen und `sendMessage()` aufrufen — so laufen echte Antworten durch die komplette Pipeline inkl. Live-Streaming, ohne Kontingent zu verbrauchen.
+  Test-Rezept: im Browser `window.fetch` für `/api/chat` durch einen Fake-SSE-Stream mit gespeicherten Modellantworten ersetzen und `sendMessage()` aufrufen — so laufen echte Antworten durch die komplette Pipeline inkl. Live-Streaming, ohne Kontingent zu verbrauchen. **Das ist jetzt automatisiert, siehe „Replay-Tests".**
+
+### Replay-Tests (`tests/`)
+
+Vor jedem Deploy, nach jeder Änderung am Parser/Streaming:
+```bash
+cd "/Users/sim/Documents/LMG Code/tests" && npm test
+```
+Einmalig vorher `cd tests && npm install`. Nutzt das installierte Google Chrome (headless), fällt sonst auf Playwrights Chromium zurück (`npx playwright install chromium`). Ein Lauf dauert ~5 s, kein `vercel dev` nötig — `replay.mjs` startet einen eigenen statischen Server; jeder echte `/api/*`-Aufruf schlägt absichtlich fehl.
+
+- `npm test -- reset` nur Fälle mit „reset" im Namen · `--ausgabe` zeigt Chat und Endstand aller Dateien bei Rot · `--sichtbar` mit Browserfenster
+- **Ein Fall** (`faelle/NN-name.json`): `dateien` (Projekt vorher), `offen`, `aktiv`, `modell`, `frage`, `antworten` (eine pro Kettenglied: `{text, chunk?, pause?, ohneDone?, abbruchNach?, sseFehler?}` oder `{status, error, retryable?}`) und `erwartet` (`dateien.<pfad>.{enthaelt, enthaeltNicht, vorkommen, unveraendert, gleich, fehlt, nichtLeer}`, `requests` = exakte Modellfolge, `keinCodeImChat` (Standard: an), `chatEnthaelt`, `keineNeuenDateien`, `aktiv`).
+- Immer geprüft: kein JS-Fehler, `vfs.content` = Monaco-Modell, keine Requests über die hinterlegten Antworten hinaus.
+- **Neuer Bug aus dem Unterricht → zuerst als Fall anlegen** (echte Modellantwort reinkopieren), rot sehen, dann fixen. Fälle 01–17 sind die Muster aus diesem Abschnitt, nachgebaut.
+
+**Erster Fund (2026-11-20):** Kommen letzter Chunk und `[DONE]` im selben Frame an, feuerte der noch ausstehende `requestAnimationFrame` des Live-Streamings *nach* dem finalen Anwenden und schrieb den rohen Ausschnitt zurück — bei North-`<body>`-Antworten blieb von `index.html` nur der Body übrig. `fetchStream()` bricht den Frame jetzt bei jedem Stream-Ende ab (`stoppeLiveUpdate()`). Der Fake-Stream pausiert deshalb standardmäßig nur 2 ms zwischen Chunks — genau dieses Timing deckt den Fehler auf; mit 30 ms war er unsichtbar.
 
 ### Prompt-Struktur
 ```

@@ -1,0 +1,47 @@
+{
+  "titel": "Reset-Button über HTML+CSS+JS (vorher kam nur die erste Datei an)",
+  "dateien": {
+    "index.html": "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Zähler</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1>Mein Zähler</h1>\n  <p id=\"anzeige\">0</p>\n  <button id=\"plus\">+1</button>\n  <script src=\"script.js\"></script>\n</body>\n</html>",
+    "style.css": "body {\n  font-family: sans-serif;\n  background: #f0f0f0;\n  text-align: center;\n}\n\nh1 {\n  color: navy;\n}\n\nbutton {\n  font-size: 2rem;\n  padding: 10px 20px;\n}",
+    "script.js": "let zaehler = 0;\nconst anzeige = document.getElementById('anzeige');\nconst plus = document.getElementById('plus');\n\nplus.addEventListener('click', () => {\n  zaehler++;\n  anzeige.textContent = zaehler;\n  anzeige.style.color = 'yellow';\n});"
+  },
+  "offen": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "aktiv": "index.html",
+  "frage": "Füge einen roten Reset-Button hinzu",
+  "antworten": [
+    {
+      "text": "Hier der Reset-Button:\n\n**index.html**\n```html\n<<<<<<< SEARCH\n  <button id=\"plus\">+1</button>\n=======\n  <button id=\"plus\">+1</button>\n  <button id=\"reset\">Reset</button>\n>>>>>>> REPLACE\n```\n\n**style.css**\n```css\n<<<<<<< SEARCH\nbutton {\n  font-size: 2rem;\n=======\n#reset {\n  background: red;\n  color: white;\n}\n\nbutton {\n  font-size: 2rem;\n>>>>>>> REPLACE\n```\n\nIn `script.js`:\n```javascript\n<<<<<<< SEARCH\nconst plus = document.getElementById('plus');\n=======\nconst plus = document.getElementById('plus');\nconst reset = document.getElementById('reset');\nreset.addEventListener('click', () => {\n  zaehler = 0;\n  anzeige.textContent = zaehler;\n});\n>>>>>>> REPLACE\n```"
+    }
+  ],
+  "erwartet": {
+    "dateien": {
+      "index.html": {
+        "enthaelt": [
+          "id=\"reset\""
+        ],
+        "vorkommen": {
+          "id=\"plus\"": 1
+        }
+      },
+      "style.css": {
+        "enthaelt": [
+          "#reset",
+          "background: red",
+          "font-family: sans-serif"
+        ]
+      },
+      "script.js": {
+        "enthaelt": [
+          "getElementById('reset')",
+          "zaehler++"
+        ]
+      }
+    },
+    "keineNeuenDateien": true
+  },
+  "quelle": "handgeschrieben nach Mustern aus CLAUDE.md (2026-11-20)"
+}

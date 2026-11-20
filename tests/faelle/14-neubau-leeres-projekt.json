@@ -1,0 +1,22 @@
+{
+  "titel": "Leeres Projekt, ein ```html-Block → index.html entsteht",
+  "dateien": {},
+  "offen": [],
+  "frage": "Bau mir eine Seite mit einem Button, der Hallo sagt",
+  "antworten": [
+    {
+      "text": "Hier ist deine Seite:\n\n```html\n<!DOCTYPE html>\n<html>\n<body>\n  <button onclick=\"alert('Hallo')\">Klick</button>\n</body>\n</html>\n```\n\nKlick auf den Button!"
+    }
+  ],
+  "erwartet": {
+    "dateien": {
+      "index.html": {
+        "enthaelt": [
+          "alert('Hallo')",
+          "<!DOCTYPE html>"
+        ]
+      }
+    }
+  },
+  "quelle": "handgeschrieben nach Mustern aus CLAUDE.md (2026-11-20)"
+}
