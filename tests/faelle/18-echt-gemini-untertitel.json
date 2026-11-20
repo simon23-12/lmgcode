@@ -1,0 +1,45 @@
+{
+  "titel": "Echte Gemini-Flash-Lite-Antwort: Untertitel in index.html + Regel in style.css",
+  "quelle": "echt, gemini-3.1-flash-lite via vercel dev, 2026-11-20",
+  "dateien": {
+    "index.html": "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Zähler</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1>Mein Zähler</h1>\n  <p id=\"anzeige\">0</p>\n  <button id=\"plus\">+1</button>\n  <script src=\"script.js\"></script>\n</body>\n</html>",
+    "style.css": "body {\n  font-family: sans-serif;\n  text-align: center;\n}\n\nh1 {\n  color: navy;\n}"
+  },
+  "offen": [
+    "style.css",
+    "index.html"
+  ],
+  "aktiv": "index.html",
+  "modell": "geminiflashlite",
+  "frage": "Füge unter der Überschrift einen Untertitel ein und mach ihn grau",
+  "antworten": [
+    {
+      "text": "```index.html\n<<<<<<< SEARCH\n  <h1>Mein Zähler</h1>\n  <p id=\"anzeige\">0</p>\n=======\n  <h1>Mein Zähler</h1>\n  <h2 id=\"untertitel\">Klick auf den Button</h2>\n  <p id=\"anzeige\">0</p>\n>>>>>>> REPLACE\n```\n\n```style.css\n<<<<<<< SEARCH\nh1 {\n  color: navy;\n}\n=======\nh1 {\n  color: navy;\n}\n\n#untertitel {\n  color: gray;\n}\n>>>>>>> REPLACE\n```\n\nUntertitel unter der Überschrift hinzugefügt und grau formatiert."
+    }
+  ],
+  "erwartet": {
+    "dateien": {
+      "index.html": {
+        "enthaelt": [
+          "<!DOCTYPE html>",
+          "<h2 id=\"untertitel\">",
+          "href=\"style.css\""
+        ],
+        "vorkommen": {
+          "<h1>": 1
+        }
+      },
+      "style.css": {
+        "enthaelt": [
+          "#untertitel",
+          "color: gray",
+          "font-family: sans-serif"
+        ]
+      }
+    },
+    "keineNeuenDateien": true,
+    "requests": [
+      "geminiflashlite"
+    ]
+  }
+}
