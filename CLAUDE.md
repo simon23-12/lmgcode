@@ -48,7 +48,7 @@ LMG Code/
 - **AI-Modelle:** Acht Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
   - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite` via Google AI Studio
   - **Gemini 3.6 Flash**: `gemini-3.6-flash` via Google AI Studio
-  - **North Mini Code**: `cohere/north-mini-code:free` via OpenRouter
+  - **Nemotron 3 Ultra**: `nvidia/nemotron-3-ultra-550b-a55b:free` via OpenRouter
   - **Nemotron 3.5 Super**: `nvidia/nemotron-3.5-super-vl:free` via OpenRouter
   - **Gemma 4 31B**: `gemma-4-31b-it` via Google AI Studio
   - **Qwen3.8-27B**: `qwen/qwen3.8-27b` via Groq
@@ -102,7 +102,7 @@ Daraus folgt zweierlei, was beim GitHub-Import lange falsch war:
 
 ### Replay-Tests (`tests/`)
 
-Vor jedem Deploy, nach jeder Änderung am Parser/Streaming:
+Vor jedem Deploy, nach jeder Änderung am Parser/Streaming/Backend (`npm test` = `backend.mjs` + `replay.mjs`):
 ```bash
 cd "/Users/sim/Documents/LMG Code/tests" && npm test
 ```
@@ -131,7 +131,7 @@ cd tests && node sammler.mjs --modelle qwen,gemma --aufgaben reset
 
 Sperrt sich **Mo–Fr 7:30–15:30** (Unterricht teilt sich das Kontingent), außer mit `--trotzdem`. 4 s Pause zwischen Anfragen (`--pause`). Ein voller Lauf kostet 21 der 1.000 OpenRouter-Anfragen/Tag. Fälle aus `pruefen/` ansehen: `node replay.mjs --pruefen --ausgabe <name>`; ist es ein Modellproblem, Datei löschen; ist es ein App-Bug, fixen und den Fall nach `gesammelt/` verschieben. Erwartungen in `aufgaben.mjs` bewusst locker (Regex) halten, sonst landen gute Antworten in `pruefen/`.
 
-**Erster Lauf (2026-11-20):** North Mini Code ist auf OpenRouter weg (HTTP 404 „no provider serves this model anymore"). Weil `streamOpenRouter()` alles außer 429/503 als fatal markiert, **bricht die Fallback-Kette an North ab**, statt zum nächsten Modell zu gehen — fällt Gemini Flash Lite aus, sehen Schüler eine Fehlermeldung.
+**Erster Lauf (2026-11-20):** North Mini Code ist auf OpenRouter weg (HTTP 404 „no provider serves this model anymore"). Weil `streamOpenRouter()` alles außer 429/503 als fatal markiert, **bricht die Fallback-Kette an North ab**, statt zum nächsten Modell zu gehen — fällt Gemini Flash Lite aus, sehen Schüler eine Fehlermeldung. **Behoben am selben Tag:** 404 und 5xx sind jetzt retryable (vorher stoppten bei OpenRouter/Groq auch 500/502/504 die Kette, 18 von 54 Fehlerklassen falsch), und North wurde durch **Nemotron 3 Ultra** ersetzt — ausgewählt per Sammler gegen Ling 3.2 Flash, Particle-1 und Nemotron 3.5 Lightning (nur Ultra 3/3 erreichbar und grün).
 
 **Erster Fund (2026-11-20):** Kommen letzter Chunk und `[DONE]` im selben Frame an, feuerte der noch ausstehende `requestAnimationFrame` des Live-Streamings *nach* dem finalen Anwenden und schrieb den rohen Ausschnitt zurück — bei North-`<body>`-Antworten blieb von `index.html` nur der Body übrig. `fetchStream()` bricht den Frame jetzt bei jedem Stream-Ende ab (`stoppeLiveUpdate()`). Der Fake-Stream pausiert deshalb standardmäßig nur 2 ms zwischen Chunks — genau dieses Timing deckt den Fehler auf; mit 30 ms war er unsichtbar.
 
@@ -158,19 +158,19 @@ Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht 
 <!-- models:chains -->
 | Gewähltes Modell | Kette |
 |---|---|
-| Gemini 3.1 Flash Lite (Standard) | Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
-| Gemini 3.6 Flash | Gemini 3.6 Flash → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
-| North Mini Code | North Mini Code → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
-| Nemotron 3.5 Super | Nemotron 3.5 Super → Gemini 3.1 Flash Lite → North Mini Code → Gemma 4 31B → Qwen3.8-27B |
-| Gemma 4 31B | Gemma 4 31B → North Mini Code → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Qwen3.8-27B |
-| Qwen3.8-27B | Qwen3.8-27B → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
-| GPT-OSS 120B | GPT-OSS 120B → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
-| Free Models Router | Free Models Router → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
+| Gemini 3.1 Flash Lite (Standard) | Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
+| Gemini 3.6 Flash | Gemini 3.6 Flash → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
+| Nemotron 3 Ultra | Nemotron 3 Ultra → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
+| Nemotron 3.5 Super | Nemotron 3.5 Super → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Gemma 4 31B → Qwen3.8-27B |
+| Gemma 4 31B | Gemma 4 31B → Nemotron 3 Ultra → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Qwen3.8-27B |
+| Qwen3.8-27B | Qwen3.8-27B → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
+| GPT-OSS 120B | GPT-OSS 120B → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
+| Free Models Router | Free Models Router → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
 <!-- /models:chains -->
 
 Die Fallback-Kette gilt für **beide Modi** (streaming und non-streaming):
 - Retryable-Fehler (429, 503, Timeout, Stream ohne `[DONE]` und ohne Content) → nächste Stufe
-- Fatale Fehler (Auth, bad request) → sofort stoppen
+- Fatale Fehler (nur 400/401/403: Auth, bad request) → sofort stoppen. **404 (Modell weg) und 5xx sind retryable** — `httpFehlerIstFatal()` / `googleFehlerIstFatal()` in `api/chat.js`, abgesichert durch `tests/backend.mjs`
 
 **Regel beim Hinzufügen/Ändern von Modellen:** Nur `models.json` bearbeiten, danach `node scripts/sync-models.mjs`. Die Datei ist die einzige Quelle der Wahrheit; `MODEL_MAP`, `GOOGLE_MODELS`, `FALLBACK_CHAINS`, `SLASH_MODEL_NAMES`, das Dropdown, `api/sanity.js` und die Modell-Listen in `about.html`/`CLAUDE.md`/`README.md` werden daraus generiert (Bereiche zwischen `models:*`-Markern — nicht von Hand editieren).
 
@@ -238,7 +238,7 @@ Quelle: https://openrouter.ai/docs/api-reference/limits
 
 > 50 Anfragen/Tag sind bei einem Kurs mit 30 Schülern nach zehn Minuten weg. Symptom: HTTP 429 `Rate limit exceeded: free-models-per-day`. `/sanity` in der App zeigt solche Modelle als **Tageslimit erreicht** (orange ⚠), `node scripts/sanity.mjs` als ✗ mit der Fehlermeldung. Vor jeder Fehlersuche also erst prüfen, ob es nur das Tageslimit ist — die Modelle sind nicht kaputt.
 
-Das Limit gilt **gemeinsam für alle** OpenRouter-Modelle in `models.json` (aktuell North Mini Code, Nemotron, Free Models Router). Deshalb steht als Standard bewusst ein Google-Modell — sonst läuft der komplette Unterrichtsalltag durch diesen einen Topf.
+Das Limit gilt **gemeinsam für alle** OpenRouter-Modelle in `models.json` (aktuell Nemotron 3 Ultra, Nemotron 3.5 Super, Free Models Router). Deshalb steht als Standard bewusst ein Google-Modell — sonst läuft der komplette Unterrichtsalltag durch diesen einen Topf.
 
 **Google AI Studio:** ebenfalls ein Free Tier mit Limits, aber **pro Modell** statt aus einem gemeinsamen Topf — Gemini Flash Lite und Gemma haben getrennte Kontingente. Google veröffentlicht die Zahlen nicht mehr in den Docs; die tatsächlichen Limits des Keys stehen unter https://aistudio.google.com/rate-limit
 
@@ -255,7 +255,8 @@ Gemessen mit dem echten App-Prompt und dem Schul-Key, mehrere Läufe je Modell:
 | gemini-3.7-flash / gemini-3.8-flash | **0/3** — durchgehend HTTP 503 „high demand" | 4,2s |
 | gemini-3.5-flash-lite | 0/1 — gar kein Code | 20,4s |
 | MiniMax M3 (seit 2026-11 nicht mehr frei, entfernt) | 220 Zeilen vollständig (18s) | 3,5s |
-| North Mini Code (2026-11-19) | 265 Zeilen vollständig (15s) | — |
+| North Mini Code (2026-11-19, seit 2026-11-20 nicht mehr verfügbar, ersetzt) | 265 Zeilen vollständig (15s) | — |
+| Nemotron 3 Ultra (2026-11-20, Sammler) | 107–141 Zeilen vollständig (20–31s) | 6–9s |
 | Nemotron 3.5 Super VL (2026-11-19) | 326 Zeilen vollständig (83s) | — |
 | Free Models Router | 99–218 Zeilen vollständig (27–51s) | 6,8–14,2s |
 

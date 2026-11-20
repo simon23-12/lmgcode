@@ -420,7 +420,7 @@
             <!-- models:dropdown -->
             <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
             <option value="geminiflash">Gemini 3.6 Flash</option>
-            <option value="north">North Mini Code</option>
+            <option value="nemotronultra">Nemotron 3 Ultra</option>
             <option value="nemotron">Nemotron 3.5 Super</option>
             <option value="gemma">Gemma 4 31B</option>
             <option value="qwen">Qwen3.8-27B</option>
@@ -486,7 +486,7 @@ const DEFAULT_MODEL = 'geminiflashlite';
 const SLASH_MODEL_NAMES = {
   geminiflashlite: 'Gemini 3.1 Flash Lite',
   geminiflash:     'Gemini 3.6 Flash',
-  north:           'North Mini Code',
+  nemotronultra:   'Nemotron 3 Ultra',
   nemotron:        'Nemotron 3.5 Super',
   gemma:           'Gemma 4 31B',
   qwen:            'Qwen3.8-27B',
@@ -494,22 +494,22 @@ const SLASH_MODEL_NAMES = {
   free:            'Free Models Router',
 };
 
-const MODEL_HOTKEYS = { '1': 'north', '2': 'gptoss', '3': 'nemotron', '4': 'gemma', '5': 'geminiflashlite', '6': 'qwen' };
-const MODEL_HOTKEY_HINT = '1&nbsp;North&nbsp;&nbsp;2&nbsp;GPT-OSS&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;&nbsp;6&nbsp;Qwen3.8-27';
+const MODEL_HOTKEYS = { '1': 'nemotronultra', '2': 'gptoss', '3': 'nemotron', '4': 'gemma', '5': 'geminiflashlite', '6': 'qwen' };
+const MODEL_HOTKEY_HINT = '1&nbsp;Nemotron&nbsp;&nbsp;2&nbsp;GPT-OSS&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;&nbsp;6&nbsp;Qwen3.8-27';
 
 const FALLBACK_CHAINS = {
-  geminiflashlite: ['geminiflashlite', 'north', 'nemotron', 'gemma', 'qwen'],
-  geminiflash:     ['geminiflash', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
-  north:           ['north', 'geminiflashlite', 'nemotron', 'gemma', 'qwen'],
-  nemotron:        ['nemotron', 'geminiflashlite', 'north', 'gemma', 'qwen'],
-  gemma:           ['gemma', 'north', 'geminiflashlite', 'nemotron', 'qwen'],
-  qwen:            ['qwen', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
-  gptoss:          ['gptoss', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
-  free:            ['free', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
+  geminiflashlite: ['geminiflashlite', 'nemotronultra', 'nemotron', 'gemma', 'qwen'],
+  geminiflash:     ['geminiflash', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
+  nemotronultra:   ['nemotronultra', 'geminiflashlite', 'nemotron', 'gemma', 'qwen'],
+  nemotron:        ['nemotron', 'geminiflashlite', 'nemotronultra', 'gemma', 'qwen'],
+  gemma:           ['gemma', 'nemotronultra', 'geminiflashlite', 'nemotron', 'qwen'],
+  qwen:            ['qwen', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
+  gptoss:          ['gptoss', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
+  free:            ['free', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
 };
 
 // Think → Code: diese Modelle bekommen bei komplexen Prompts erst eine Planungsanfrage.
-const PLAN_MODELS = new Set(['north', 'nemotron']);
+const PLAN_MODELS = new Set(['nemotronultra', 'nemotron']);
 // </models:maps>
 
 // ── 1. State ─────────────────────────────────────────────────────────────────
@@ -2640,7 +2640,7 @@ function neubauHinweis(text, agent) {
   const hatInhalt = Object.keys(vfs).some(pfad => (vfs[pfad].content || '').trim() !== '');
   if (hatInhalt) return;
   agent.neubauHinweisGezeigt = true;
-  sysMsgHtml('Tipp: Für größere Neubauten liefern <b>North Mini Code</b>, <b>Gemini 3.6 Flash</b> oder der <b>Free Models Router</b> deutlich mehr — oben im Dropdown wählbar. Für kleine Änderungen ist das aktuelle Modell schneller.');
+  sysMsgHtml('Tipp: Für größere Neubauten liefern <b>Nemotron 3 Ultra</b>, <b>Gemini 3.6 Flash</b> oder der <b>Free Models Router</b> deutlich mehr — oben im Dropdown wählbar. Für kleine Änderungen ist das aktuelle Modell schneller.');
 }
 
 // Fehler aus einem SSE-Payload vereinheitlichen. Unser Backend schickt

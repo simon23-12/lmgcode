@@ -24,16 +24,16 @@
       "chain": [
         "geminiflash",
         "geminiflashlite",
-        "north",
+        "nemotronultra",
         "nemotron",
         "gemma"
       ]
     },
     {
-      "key": "north",
-      "label": "North Mini Code",
+      "key": "nemotronultra",
+      "label": "Nemotron 3 Ultra",
       "provider": "openrouter",
-      "id": "cohere/north-mini-code:free",
+      "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "rank": 3,
       "hotkey": "1",
       "plan": true

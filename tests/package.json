@@ -2,6 +2,11 @@
   "name": "lmgcode-tests",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node replay.mjs" },
-  "devDependencies": { "playwright": "^1.56.0" }
+  "scripts": {
+    "test": "node backend.mjs && node replay.mjs",
+    "sammeln": "node sammler.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
 }

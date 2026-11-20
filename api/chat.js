@@ -12,7 +12,7 @@ const GOOGLE_MODELS = {
 const MODEL_MAP = {
   geminiflashlite: 'geminiflashlite',
   geminiflash:     'geminiflash',
-  north:           'cohere/north-mini-code:free',
+  nemotronultra:   'nvidia/nemotron-3-ultra-550b-a55b:free',
   nemotron:        'nvidia/nemotron-3.5-super-vl:free',
   gemma:           'gemma',
   qwen:            'qwen/qwen3.8-27b',
@@ -117,7 +117,7 @@ async function streamOpenRouter(prompt, orModel, res) {
   if (!r.ok) {
     const data = await r.json();
     const msg = data?.error?.message || 'Fehler beim Generieren.';
-    const retryable = r.status === 429 || r.status === 503;
+    const retryable = !httpFehlerIstFatal(r.status);
     const err = new Error(msg);
     if (!retryable) err.fatal = true;
     throw err;
@@ -160,15 +160,26 @@ async function streamGoogleAI(prompt, googleModel, res) {
   }
 }
 
-// Fatal sind nur Fehler, die beim nächsten Versuch genauso kämen: kaputter Key,
-// ungültige Anfrage, unbekanntes Modell. Alles andere (503, 500, abgebrochener
-// oder unlesbarer Stream, Netzwerk) ist vorübergehend — dann soll die
+// Fatal (= Fallback-Kette bricht ab) ist nur, was beim NÄCHSTEN Modell genauso
+// käme: ungültige Anfrage (400), kaputter Key oder fehlende Berechtigung (401/403).
+// 404 heißt „dieses Modell gibt es nicht (mehr)" und betrifft nur dieses eine
+// Glied — vorher stoppte die Kette daran: Als North Mini Code bei OpenRouter
+// verschwand, bekamen Schüler bei jedem Gemini-Engpass eine Fehlermeldung, statt
+// bei Nemotron/Gemma/Qwen zu landen (2026-11-20). Ebenso 500/502/504, die bei
+// OpenRouter und Groq vorher fatal waren, obwohl sie fast immer vorübergehen.
+function httpFehlerIstFatal(status) {
+  return [400, 401, 403].includes(status);
+}
+
+// Dasselbe für das Google-SDK, das den Status oft nur in der Meldung trägt.
+// Alles andere (503, 500, abgebrochener oder unlesbarer Stream, Netzwerk,
+// unbekanntes Modell) ist vorübergehend oder modellspezifisch — dann soll die
 // Fallback-Kette das nächste Modell probieren, statt aufzugeben.
 function googleFehlerIstFatal(err) {
   const msg = err.message?.toLowerCase() || '';
-  if ([429, 500, 502, 503, 504].includes(err.status)) return false;
-  if (/\b(429|500|502|503|504)\b|rate limit|overload|quota|resource_exhausted|high demand|unavailable|parse stream|fetch failed|timeout|econnreset|socket/.test(msg)) return false;
-  return [400, 401, 403, 404].includes(err.status) || /\b(400|401|403|404)\b|api key|permission|invalid argument|not found/.test(msg);
+  if ([404, 429, 500, 502, 503, 504].includes(err.status)) return false;
+  if (/\b(404|429|500|502|503|504)\b|not found|rate limit|overload|quota|resource_exhausted|high demand|unavailable|parse stream|fetch failed|timeout|econnreset|socket/.test(msg)) return false;
+  return httpFehlerIstFatal(err.status) || /\b(400|401|403)\b|api key|permission|invalid argument/.test(msg);
 }
 
 async function tryOpenRouter(prompt, orModel) {
@@ -199,7 +210,7 @@ async function tryOpenRouter(prompt, orModel) {
 
   if (!r.ok) {
     const msg = data?.error?.message || 'Fehler beim Generieren.';
-    const retryable = r.status === 429 || r.status === 503;
+    const retryable = !httpFehlerIstFatal(r.status);
     if (!retryable) {
       const fatal = new Error(msg);
       fatal.fatal = true;
@@ -245,7 +256,7 @@ async function tryGroq(prompt, groqModel) {
 
   if (!r.ok) {
     const msg = data?.error?.message || 'Fehler beim Generieren.';
-    const retryable = r.status === 429 || r.status === 503;
+    const retryable = !httpFehlerIstFatal(r.status);
     const err = new Error(msg);
     if (!retryable) err.fatal = true;
     throw err;
@@ -289,7 +300,7 @@ async function streamGroq(prompt, groqModel, res) {
   if (!r.ok) {
     const data = await r.json();
     const msg = data?.error?.message || 'Fehler beim Generieren.';
-    const retryable = r.status === 429 || r.status === 503;
+    const retryable = !httpFehlerIstFatal(r.status);
     const err = new Error(msg);
     if (!retryable) err.fatal = true;
     throw err;

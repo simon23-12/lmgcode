@@ -46,7 +46,7 @@ LMG Code/
 - **AI-Modelle:** Acht Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
   - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite` via Google AI Studio
   - **Gemini 3.6 Flash**: `gemini-3.6-flash` via Google AI Studio
-  - **North Mini Code**: `cohere/north-mini-code:free` via OpenRouter
+  - **Nemotron 3 Ultra**: `nvidia/nemotron-3-ultra-550b-a55b:free` via OpenRouter
   - **Nemotron 3.5 Super**: `nvidia/nemotron-3.5-super-vl:free` via OpenRouter
   - **Gemma 4 31B**: `gemma-4-31b-it` via Google AI Studio
   - **Qwen3.8-27B**: `qwen/qwen3.8-27b` via Groq
@@ -119,14 +119,14 @@ Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht 
 <!-- models:chains -->
 | Gewähltes Modell | Kette |
 |---|---|
-| Gemini 3.1 Flash Lite (Standard) | Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
-| Gemini 3.6 Flash | Gemini 3.6 Flash → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
-| North Mini Code | North Mini Code → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
-| Nemotron 3.5 Super | Nemotron 3.5 Super → Gemini 3.1 Flash Lite → North Mini Code → Gemma 4 31B → Qwen3.8-27B |
-| Gemma 4 31B | Gemma 4 31B → North Mini Code → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Qwen3.8-27B |
-| Qwen3.8-27B | Qwen3.8-27B → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
-| GPT-OSS 120B | GPT-OSS 120B → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
-| Free Models Router | Free Models Router → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
+| Gemini 3.1 Flash Lite (Standard) | Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
+| Gemini 3.6 Flash | Gemini 3.6 Flash → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
+| Nemotron 3 Ultra | Nemotron 3 Ultra → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
+| Nemotron 3.5 Super | Nemotron 3.5 Super → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Gemma 4 31B → Qwen3.8-27B |
+| Gemma 4 31B | Gemma 4 31B → Nemotron 3 Ultra → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Qwen3.8-27B |
+| Qwen3.8-27B | Qwen3.8-27B → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
+| GPT-OSS 120B | GPT-OSS 120B → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
+| Free Models Router | Free Models Router → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
 <!-- /models:chains -->
 
 Die Fallback-Kette gilt für **beide Modi** (streaming und non-streaming):
