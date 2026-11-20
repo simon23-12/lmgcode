@@ -24,9 +24,11 @@ const gross = s => s.charAt(0).toUpperCase() + s.slice(1);
 const q  = s => `'${String(s).replace(/'/g, "\\'")}'`;
 const pad = (list) => Math.max(...list.map(s => s.length));
 
-// Erstes Wort des Labels, auf Hotkey-Hinweis-Länge gestutzt.
-function kurzname(label) {
-  const wort = label.split(/[\s/]/)[0];
+// Kurzname für den Hotkey-Hinweis: Feld "kurz" aus models.json, sonst erstes
+// Wort des Labels (reicht nicht, sobald zwei Modelle derselben Familie da sind).
+function kurzname(m) {
+  if (m.kurz) return m.kurz;
+  const wort = m.label.split(/[\s/]/)[0];
   return wort.length > 10 ? wort.slice(0, 10) : wort;
 }
 
@@ -87,7 +89,7 @@ function genFrontendMaps(d) {
   const wk = pad(d.models.map(m => m.key)) + 1;
   const hotkeys = Object.entries(d.hotkeys).sort(([a], [b]) => a.localeCompare(b));
   const hint = hotkeys
-    .map(([k, key]) => `${k}&nbsp;${esc(kurzname(d.models.find(m => m.key === key).label))}`)
+    .map(([k, key]) => `${k}&nbsp;${esc(kurzname(d.models.find(m => m.key === key)))}`)
     .join('&nbsp;&nbsp;');
   return [
     `const DEFAULT_MODEL = ${q(d.default)};`,

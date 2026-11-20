@@ -39,8 +39,8 @@
     },
     "requests": [
       "geminiflashlite",
-      "nemotronultra",
-      "nemotron"
+      "geminiflashlite35",
+      "nemotronultra"
     ]
   },
   "quelle": "handgeschrieben nach Mustern aus CLAUDE.md (2026-11-20)"

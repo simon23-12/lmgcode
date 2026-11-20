@@ -419,6 +419,7 @@
           <select id="model-select" title="Modell wählen">
             <!-- models:dropdown -->
             <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
+            <option value="geminiflashlite35">Gemini 3.5 Flash Lite</option>
             <option value="geminiflash">Gemini 3.6 Flash</option>
             <option value="nemotronultra">Nemotron 3 Ultra</option>
             <option value="nemotron">Nemotron 3.5 Super</option>
@@ -484,28 +485,30 @@
 const DEFAULT_MODEL = 'geminiflashlite';
 
 const SLASH_MODEL_NAMES = {
-  geminiflashlite: 'Gemini 3.1 Flash Lite',
-  geminiflash:     'Gemini 3.6 Flash',
-  nemotronultra:   'Nemotron 3 Ultra',
-  nemotron:        'Nemotron 3.5 Super',
-  gemma:           'Gemma 4 31B',
-  qwen:            'Qwen3.8-27B',
-  gptoss:          'GPT-OSS 120B',
-  free:            'Free Models Router',
+  geminiflashlite:   'Gemini 3.1 Flash Lite',
+  geminiflashlite35: 'Gemini 3.5 Flash Lite',
+  geminiflash:       'Gemini 3.6 Flash',
+  nemotronultra:     'Nemotron 3 Ultra',
+  nemotron:          'Nemotron 3.5 Super',
+  gemma:             'Gemma 4 31B',
+  qwen:              'Qwen3.8-27B',
+  gptoss:            'GPT-OSS 120B',
+  free:              'Free Models Router',
 };
 
-const MODEL_HOTKEYS = { '1': 'nemotronultra', '2': 'gptoss', '3': 'nemotron', '4': 'gemma', '5': 'geminiflashlite', '6': 'qwen' };
-const MODEL_HOTKEY_HINT = '1&nbsp;Nemotron&nbsp;&nbsp;2&nbsp;GPT-OSS&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;&nbsp;6&nbsp;Qwen3.8-27';
+const MODEL_HOTKEYS = { '1': 'nemotronultra', '2': 'gptoss', '3': 'nemotron', '4': 'gemma', '5': 'geminiflashlite', '6': 'qwen', '7': 'geminiflashlite35' };
+const MODEL_HOTKEY_HINT = '1&nbsp;Ultra&nbsp;&nbsp;2&nbsp;GPT-OSS&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Lite 3.1&nbsp;&nbsp;6&nbsp;Qwen3.8-27&nbsp;&nbsp;7&nbsp;Lite 3.5';
 
 const FALLBACK_CHAINS = {
-  geminiflashlite: ['geminiflashlite', 'nemotronultra', 'nemotron', 'gemma', 'qwen'],
-  geminiflash:     ['geminiflash', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
-  nemotronultra:   ['nemotronultra', 'geminiflashlite', 'nemotron', 'gemma', 'qwen'],
-  nemotron:        ['nemotron', 'geminiflashlite', 'nemotronultra', 'gemma', 'qwen'],
-  gemma:           ['gemma', 'nemotronultra', 'geminiflashlite', 'nemotron', 'qwen'],
-  qwen:            ['qwen', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
-  gptoss:          ['gptoss', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
-  free:            ['free', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
+  geminiflashlite:   ['geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron', 'gemma'],
+  geminiflashlite35: ['geminiflashlite35', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
+  geminiflash:       ['geminiflash', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
+  nemotronultra:     ['nemotronultra', 'geminiflashlite', 'geminiflashlite35', 'nemotron', 'gemma'],
+  nemotron:          ['nemotron', 'geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'gemma'],
+  gemma:             ['gemma', 'nemotronultra', 'geminiflashlite', 'geminiflashlite35', 'nemotron'],
+  qwen:              ['qwen', 'geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron'],
+  gptoss:            ['gptoss', 'geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron'],
+  free:              ['free', 'geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron'],
 };
 
 // Think → Code: diese Modelle bekommen bei komplexen Prompts erst eine Planungsanfrage.

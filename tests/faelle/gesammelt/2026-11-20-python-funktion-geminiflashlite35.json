@@ -1,0 +1,34 @@
+{
+  "titel": "Python: neue Funktion ergänzen — Gemini 3.5 Flash Lite",
+  "quelle": "echt, gemini-3.5-flash-lite (google) via sammler.mjs, 2026-11-20",
+  "dateien": {
+    "rechner.py": "def addiere(a, b):\n    return a + b\n\n\ndef main():\n    x = int(input(\"Erste Zahl: \"))\n    y = int(input(\"Zweite Zahl: \"))\n    print(\"Summe:\", addiere(x, y))\n\n\nmain()\n"
+  },
+  "offen": [
+    "rechner.py"
+  ],
+  "aktiv": "rechner.py",
+  "modell": "geminiflashlite35",
+  "nurDiesesModell": true,
+  "frage": "Ergänze eine Funktion für die Multiplikation und gib das Produkt auch aus",
+  "erwartet": {
+    "dateien": {
+      "rechner.py": {
+        "regex": [
+          "def \\w+\\(",
+          "\\*"
+        ],
+        "enthaelt": [
+          "def addiere(a, b):",
+          "main()"
+        ]
+      }
+    },
+    "keineNeuenDateien": true
+  },
+  "antworten": [
+    {
+      "text": "<<<<<<< SEARCH\ndef addiere(a, b):\n    return a + b\n\n\ndef main():\n    x = int(input(\"Erste Zahl: \"))\n    y = int(input(\"Zweite Zahl: \"))\n    print(\"Summe:\", addiere(x, y))\n=======\ndef addiere(a, b):\n    return a + b\n\n\ndef multipliziere(a, b):\n    return a * b\n\n\ndef main():\n    x = int(input(\"Erste Zahl: \"))\n    y = int(input(\"Zweite Zahl: \"))\n    print(\"Summe:\", addiere(x, y))\n    print(\"Produkt:\", multipliziere(x, y))\n>>>>>>> REPLACE\nMultiplikationsfunktion und Ausgabe hinzugefügt."
+    }
+  ]
+}

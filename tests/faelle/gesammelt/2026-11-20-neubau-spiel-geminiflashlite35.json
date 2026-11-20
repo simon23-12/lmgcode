@@ -1,0 +1,22 @@
+{
+  "titel": "Neubau aus leerem Projekt — Gemini 3.5 Flash Lite",
+  "quelle": "echt, gemini-3.5-flash-lite (google) via sammler.mjs, 2026-11-20",
+  "dateien": {},
+  "offen": [],
+  "modell": "geminiflashlite35",
+  "nurDiesesModell": true,
+  "frage": "Bau mir ein Spiel: Ein Ball springt herum und man muss ihn anklicken, um Punkte zu bekommen",
+  "erwartet": {
+    "irgendeineDatei": {
+      "regex": [
+        "<canvas|<div",
+        "click|mousedown|pointerdown"
+      ]
+    }
+  },
+  "antworten": [
+    {
+      "text": "```index.html\n<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n    <meta charset=\"UTF-8\">\n    <title>Ball-Klick-Spiel</title>\n    <style>\n        body {\n            margin: 0;\n            background: #222;\n            color: white;\n            font-family: sans-serif;\n            text-align: center;\n            overflow: hidden;\n            user-select: none;\n        }\n        #score {\n            font-size: 24px;\n            margin-top: 10px;\n        }\n        #ball {\n            width: 50px;\n            height: 50px;\n            background: #ff3366;\n            border-radius: 50%;\n            position: absolute;\n            cursor: pointer;\n        }\n    </style>\n</head>\n<body>\n    <div id=\"score\">Punkte: 0</div>\n    <div id=\"ball\"></div>\n\n    <script>\n        const ball = document.getElementById('ball');\n        const scoreDisplay = document.getElementById('score');\n        \n        let score = 0;\n        let x = 100, y = 100;\n        let dx = 3, dy = 3;\n\n        function update() {\n            x += dx;\n            y += dy;\n\n            if (x <= 0 || x >= window.innerWidth - 50) dx *= -1;\n            if (y <= 40 || y >= window.innerHeight - 50) dy *= -1;\n\n            ball.style.left = x + 'px';\n            ball.style.top = y + 'px';\n\n            requestAnimationFrame(update);\n        }\n\n        ball.addEventListener('click', () => {\n            score++;\n            scoreDisplay.textContent = 'Punkte: ' + score;\n            dx *= 1.1;\n            dy *= 1.1;\n            x = Math.random() * (window.innerWidth - 100);\n            y = Math.random() * (window.innerHeight - 100) + 40;\n        });\n\n        update();\n    </script>\n</body>\n</html>\n```\nEin fangbares Ballspiel mit steigender Schwierigkeit."
+    }
+  ]
+}

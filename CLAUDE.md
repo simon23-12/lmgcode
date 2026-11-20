@@ -45,8 +45,9 @@ LMG Code/
 - **Icons:** Font Awesome 6.5.0 via CDN
 - **Backend:** Vercel Serverless Functions (Node.js, ESM)
 <!-- models:models -->
-- **AI-Modelle:** Acht Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
+- **AI-Modelle:** Neun Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
   - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite` via Google AI Studio
+  - **Gemini 3.5 Flash Lite**: `gemini-3.5-flash-lite` via Google AI Studio
   - **Gemini 3.6 Flash**: `gemini-3.6-flash` via Google AI Studio
   - **Nemotron 3 Ultra**: `nvidia/nemotron-3-ultra-550b-a55b:free` via OpenRouter
   - **Nemotron 3.5 Super**: `nvidia/nemotron-3.5-super-vl:free` via OpenRouter
@@ -158,14 +159,15 @@ Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht 
 <!-- models:chains -->
 | Gewähltes Modell | Kette |
 |---|---|
-| Gemini 3.1 Flash Lite (Standard) | Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
+| Gemini 3.1 Flash Lite (Standard) | Gemini 3.1 Flash Lite → Gemini 3.5 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
+| Gemini 3.5 Flash Lite | Gemini 3.5 Flash Lite → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
 | Gemini 3.6 Flash | Gemini 3.6 Flash → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
-| Nemotron 3 Ultra | Nemotron 3 Ultra → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
-| Nemotron 3.5 Super | Nemotron 3.5 Super → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Gemma 4 31B → Qwen3.8-27B |
-| Gemma 4 31B | Gemma 4 31B → Nemotron 3 Ultra → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Qwen3.8-27B |
-| Qwen3.8-27B | Qwen3.8-27B → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
-| GPT-OSS 120B | GPT-OSS 120B → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
-| Free Models Router | Free Models Router → Gemini 3.1 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super → Gemma 4 31B |
+| Nemotron 3 Ultra | Nemotron 3 Ultra → Gemini 3.1 Flash Lite → Gemini 3.5 Flash Lite → Nemotron 3.5 Super → Gemma 4 31B |
+| Nemotron 3.5 Super | Nemotron 3.5 Super → Gemini 3.1 Flash Lite → Gemini 3.5 Flash Lite → Nemotron 3 Ultra → Gemma 4 31B |
+| Gemma 4 31B | Gemma 4 31B → Nemotron 3 Ultra → Gemini 3.1 Flash Lite → Gemini 3.5 Flash Lite → Nemotron 3.5 Super |
+| Qwen3.8-27B | Qwen3.8-27B → Gemini 3.1 Flash Lite → Gemini 3.5 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super |
+| GPT-OSS 120B | GPT-OSS 120B → Gemini 3.1 Flash Lite → Gemini 3.5 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super |
+| Free Models Router | Free Models Router → Gemini 3.1 Flash Lite → Gemini 3.5 Flash Lite → Nemotron 3 Ultra → Nemotron 3.5 Super |
 <!-- /models:chains -->
 
 Die Fallback-Kette gilt für **beide Modi** (streaming und non-streaming):
@@ -242,6 +244,16 @@ Das Limit gilt **gemeinsam für alle** OpenRouter-Modelle in `models.json` (aktu
 
 **Google AI Studio:** ebenfalls ein Free Tier mit Limits, aber **pro Modell** statt aus einem gemeinsamen Topf — Gemini Flash Lite und Gemma haben getrennte Kontingente. Google veröffentlicht die Zahlen nicht mehr in den Docs; die tatsächlichen Limits des Keys stehen unter https://aistudio.google.com/rate-limit
 
+Stand laut https://aistudio.google.com/rate-limit (2026-11-20, Free Tier, je Modell — Anfragen/Minute · Tokens/Minute · Anfragen/Tag):
+
+| Modell | RPM | TPM | RPD |
+|---|---|---|---|
+| Gemini 3.1 Flash Lite | 15 | 250K | 500 |
+| **Gemini 3.5 Flash Lite** | 15 | 250K | 500 — **eigener Topf** |
+| Gemini 3.6 Flash / 3.8 Flash / 3 Flash | 5 | 250K | **20** |
+
+Deshalb stehen die beiden Flash-Lite-Modelle jeweils als **erster Fallback** des anderen in der Kette: Läuft 3.1 im Unterricht auf 15/min (am 2026-11-20 vormittags 13/15), fängt 3.5 mit eigenen 15/min auf, bevor es zu OpenRouter geht. Gemini 3.6 Flash ist mit 20 Anfragen/Tag für eine Klasse praktisch nicht nutzbar (war am selben Tag schon bei 21/20).
+
 **Groq:** eigenes Freikontingent, unabhängig von beiden.
 
 ### Modellwahl — Messwerte (2026-09-03)
@@ -253,7 +265,8 @@ Gemessen mit dem echten App-Prompt und dem Schul-Key, mehrere Läufe je Modell:
 | gemini-3.1-flash-lite (Standard) | 3/3 erfolgreich, aber nur 29–30 Zeilen ohne Röhren/Punkte | **1,7s** |
 | gemini-3.6-flash | 1/3 erfolgreich (sonst HTTP 503), dann 95–101 Zeilen vollständig | 7,6s |
 | gemini-3.7-flash / gemini-3.8-flash | **0/3** — durchgehend HTTP 503 „high demand" | 4,2s |
-| gemini-3.5-flash-lite | 0/1 — gar kein Code | 20,4s |
+| gemini-3.5-flash-lite (2026-09-03) | 0/1 — gar kein Code | 20,4s |
+| gemini-3.5-flash-lite (2026-11-20, Sammler) | **7/7 grün**, Neubau 70 Zeilen in 3,5s (3.1 Lite: 43) | **~2s** |
 | MiniMax M3 (seit 2026-11 nicht mehr frei, entfernt) | 220 Zeilen vollständig (18s) | 3,5s |
 | North Mini Code (2026-11-19, seit 2026-11-20 nicht mehr verfügbar, ersetzt) | 265 Zeilen vollständig (15s) | — |
 | Nemotron 3 Ultra (2026-11-20, Sammler) | 107–141 Zeilen vollständig (20–31s) | 6–9s |

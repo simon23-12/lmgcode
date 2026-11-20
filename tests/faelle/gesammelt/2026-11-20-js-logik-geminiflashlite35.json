@@ -1,0 +1,39 @@
+{
+  "titel": "Logik in der aktiven JS-Datei — Gemini 3.5 Flash Lite",
+  "quelle": "echt, gemini-3.5-flash-lite (google) via sammler.mjs, 2026-11-20",
+  "dateien": {
+    "index.html": "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Zähler</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1>Mein Zähler</h1>\n  <p id=\"anzeige\">0</p>\n  <button id=\"plus\">+1</button>\n  <script src=\"script.js\"></script>\n</body>\n</html>",
+    "style.css": "body {\n  font-family: sans-serif;\n  background: #f0f0f0;\n  text-align: center;\n}\n\nh1 {\n  color: navy;\n}\n\nbutton {\n  font-size: 2rem;\n  padding: 10px 20px;\n}",
+    "script.js": "let zaehler = 0;\nconst anzeige = document.getElementById('anzeige');\nconst plus = document.getElementById('plus');\n\nplus.addEventListener('click', () => {\n  zaehler++;\n  anzeige.textContent = zaehler;\n});"
+  },
+  "offen": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "aktiv": "script.js",
+  "modell": "geminiflashlite35",
+  "nurDiesesModell": true,
+  "frage": "Wenn der Zähler 10 erreicht, soll er wieder bei 0 anfangen",
+  "erwartet": {
+    "dateien": {
+      "script.js": {
+        "regex": [
+          "10"
+        ],
+        "enthaelt": [
+          "getElementById('anzeige')"
+        ]
+      },
+      "index.html": {
+        "unveraendert": true
+      }
+    },
+    "keineNeuenDateien": true
+  },
+  "antworten": [
+    {
+      "text": "<<<<<<< SEARCH\nplus.addEventListener('click', () => {\n  zaehler++;\n  anzeige.textContent = zaehler;\n});\n=======\nplus.addEventListener('click', () => {\n  zaehler++;\n  if (zaehler > 10) {\n    zaehler = 0;\n  }\n  anzeige.textContent = zaehler;\n});\n>>>>>>> REPLACE\nZähler springt nach 10 wieder auf 0 zurück."
+    }
+  ]
+}

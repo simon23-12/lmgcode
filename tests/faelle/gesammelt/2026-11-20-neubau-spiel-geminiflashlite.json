@@ -1,0 +1,22 @@
+{
+  "titel": "Neubau aus leerem Projekt — Gemini 3.1 Flash Lite",
+  "quelle": "echt, gemini-3.1-flash-lite (google) via sammler.mjs, 2026-11-20",
+  "dateien": {},
+  "offen": [],
+  "modell": "geminiflashlite",
+  "nurDiesesModell": true,
+  "frage": "Bau mir ein Spiel: Ein Ball springt herum und man muss ihn anklicken, um Punkte zu bekommen",
+  "erwartet": {
+    "irgendeineDatei": {
+      "regex": [
+        "<canvas|<div",
+        "click|mousedown|pointerdown"
+      ]
+    }
+  },
+  "antworten": [
+    {
+      "text": "```index.html\n<!DOCTYPE html>\n<html>\n<head>\n<style>\n    body { margin: 0; overflow: hidden; background: #222; text-align: center; font-family: sans-serif; color: white; }\n    #ball { width: 50px; height: 50px; background: red; border-radius: 50%; position: absolute; cursor: pointer; }\n    #score { font-size: 24px; margin-top: 20px; }\n</style>\n</head>\n<body>\n    <div id=\"score\">Punkte: 0</div>\n    <div id=\"ball\"></div>\n\n    <script>\n        let score = 0;\n        let x = 100, y = 100;\n        let dx = 5, dy = 5;\n        const ball = document.getElementById('ball');\n        const scoreDisplay = document.getElementById('score');\n\n        function move() {\n            x += dx; y += dy;\n            if (x < 0 || x > window.innerWidth - 50) dx *= -1;\n            if (y < 0 || y > window.innerHeight - 50) dy *= -1;\n            ball.style.left = x + 'px';\n            ball.style.top = y + 'px';\n            requestAnimationFrame(move);\n        }\n\n        ball.addEventListener('click', () => {\n            score++;\n            scoreDisplay.innerText = 'Punkte: ' + score;\n            dx *= 1.1; dy *= 1.1;\n        });\n\n        move();\n    </script>\n</body>\n</html>\n```\n\nIch habe ein Spiel erstellt, in dem du einen sich bewegenden Ball anklicken musst."
+    }
+  ]
+}
