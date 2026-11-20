@@ -2235,7 +2235,24 @@ function togglePreview() {
   }
 }
 
-document.getElementById('preview-btn').onclick = togglePreview;
+// Nur per Maus/Touch umschalten. Ein fokussierter Button wird vom Browser auch
+// per Leertaste/Enter „geklickt" — bei Spielen in der Vorschau (Springen mit der
+// Leertaste) sprang die Ansicht dann zurück in den Code. Tastatur-Klicks haben
+// event.detail === 0. Danach bekommt die Vorschau den Fokus, damit das Spiel
+// die Tasten direkt erhält, ohne dass man erst hineinklicken muss.
+function nurPerMaus(aktion) {
+  return e => {
+    if (e.detail === 0) return;
+    e.currentTarget.blur();
+    aktion();
+  };
+}
+document.getElementById('preview-btn').addEventListener('click', nurPerMaus(() => {
+  togglePreview();
+  if (!previewActive) return;
+  const frame = document.getElementById('preview-frame');
+  frame.addEventListener('load', () => frame.focus(), { once: true });
+}));
 
 // ── 7b. Run (Piston API) ──────────────────────────────────────────────────────
 
@@ -2501,7 +2518,7 @@ async function runCode() {
   out.innerHTML += `\n<span class="${run.code === 0 ? 'ro-exit0' : 'ro-exit1'}">─── Exit ${run.code} ───</span>`;
 }
 
-document.getElementById('run-btn').onclick = toggleRunOutput;
+document.getElementById('run-btn').addEventListener('click', nurPerMaus(toggleRunOutput));
 
 // ── 9b. Streaming helpers ─────────────────────────────────────────────────────
 

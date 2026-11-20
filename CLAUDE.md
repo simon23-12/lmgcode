@@ -316,6 +316,8 @@ Die Vorschau ist ein `<iframe srcdoc>` mit `sandbox="allow-scripts allow-forms a
 
 - **Relative Links zeigen auf den Server, nicht aufs Projekt.** In einem `srcdoc`-iframe ist die Basis-URL die der Elternseite: `<a href="about.html">` löst zu `lmgcode.vercel.app/about.html` auf — 404 bei jeder mehrseitigen Website. `navShim()` fängt solche Klicks ab und schickt Ziel plus Quellpfad per `postMessage` an die Elternseite; `loesePreviewPfad()` löst relativ zum Verzeichnis der aktuellen Seite auf (inkl. `../`, `shop/` → `shop/index.html`) und `buildPreviewHtml(ziel)` rendert neu. Existiert die Seite nicht, sagt die App das, statt stumm zu scheitern.
 
+- **Leertaste schaltete die Ansicht um.** Nach dem Klick auf „Vorschau“ behielt der Button den Fokus, und Browser „klicken“ einen fokussierten Button auch per Leertaste/Enter — ein Spiel, das mit Leertaste springt, sprang zurück in den Code. `nurPerMaus()` ignoriert Tastatur-Klicks (`event.detail === 0`) für Vorschau- und Ausführen-Button und gibt danach der Vorschau den Fokus (2026-11-20).
+
 Verifiziert (2026-09-03): Three.js r160 per ESM-Importmap von unpkg lädt, WebGL rendert, `localStorage` funktioniert über den Shim, und eine dreiseitige Website navigiert in der Vorschau zwischen den Seiten.
 
 ## Wichtige Pitfalls (Monaco)
