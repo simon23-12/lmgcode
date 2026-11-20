@@ -43,12 +43,11 @@ LMG Code/
 - **Icons:** Font Awesome 6.5.0 via CDN
 - **Backend:** Vercel Serverless Functions (Node.js, ESM)
 <!-- models:models -->
-- **AI-Modelle:** Neun Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
+- **AI-Modelle:** Acht Modelle, User wählt im Dropdown — **Standard: Gemini 3.1 Flash Lite**:
   - **Gemini 3.1 Flash Lite** (Standard): `gemini-3.1-flash-lite` via Google AI Studio
   - **Gemini 3.6 Flash**: `gemini-3.6-flash` via Google AI Studio
   - **North Mini Code**: `cohere/north-mini-code:free` via OpenRouter
-  - **MiniMax M3**: `minimax/minimax-m3:free` via OpenRouter
-  - **Nemotron 3 Super**: `nvidia/nemotron-3-super-120b-a12b:free` via OpenRouter
+  - **Nemotron 3.5 Super**: `nvidia/nemotron-3.5-super-vl:free` via OpenRouter
   - **Gemma 4 31B**: `gemma-4-31b-it` via Google AI Studio
   - **Qwen3.8-27B**: `qwen/qwen3.8-27b` via Groq
   - **GPT-OSS 120B**: `openai/gpt-oss-120b` via Groq
@@ -120,15 +119,14 @@ Fallback-Logik liegt im **Frontend** (`FALLBACK_CHAINS` in `index.html`), nicht 
 <!-- models:chains -->
 | Gewähltes Modell | Kette |
 |---|---|
-| Gemini 3.1 Flash Lite (Standard) | Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Nemotron 3 Super → Gemma 4 31B |
-| Gemini 3.6 Flash | Gemini 3.6 Flash → Gemini 3.1 Flash Lite → MiniMax M3 → North Mini Code → Gemma 4 31B |
-| North Mini Code | North Mini Code → Gemini 3.1 Flash Lite → MiniMax M3 → Nemotron 3 Super → Gemma 4 31B |
-| MiniMax M3 | MiniMax M3 → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3 Super → Gemma 4 31B |
-| Nemotron 3 Super | Nemotron 3 Super → Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Gemma 4 31B |
-| Gemma 4 31B | Gemma 4 31B → North Mini Code → Gemini 3.1 Flash Lite → MiniMax M3 → Nemotron 3 Super |
-| Qwen3.8-27B | Qwen3.8-27B → Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Nemotron 3 Super |
-| GPT-OSS 120B | GPT-OSS 120B → Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Nemotron 3 Super |
-| Free Models Router | Free Models Router → Gemini 3.1 Flash Lite → North Mini Code → MiniMax M3 → Nemotron 3 Super |
+| Gemini 3.1 Flash Lite (Standard) | Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
+| Gemini 3.6 Flash | Gemini 3.6 Flash → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
+| North Mini Code | North Mini Code → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Gemma 4 31B → Qwen3.8-27B |
+| Nemotron 3.5 Super | Nemotron 3.5 Super → Gemini 3.1 Flash Lite → North Mini Code → Gemma 4 31B → Qwen3.8-27B |
+| Gemma 4 31B | Gemma 4 31B → North Mini Code → Gemini 3.1 Flash Lite → Nemotron 3.5 Super → Qwen3.8-27B |
+| Qwen3.8-27B | Qwen3.8-27B → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
+| GPT-OSS 120B | GPT-OSS 120B → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
+| Free Models Router | Free Models Router → Gemini 3.1 Flash Lite → North Mini Code → Nemotron 3.5 Super → Gemma 4 31B |
 <!-- /models:chains -->
 
 Die Fallback-Kette gilt für **beide Modi** (streaming und non-streaming):
@@ -201,7 +199,7 @@ Quelle: https://openrouter.ai/docs/api-reference/limits
 
 > 50 Anfragen/Tag sind bei einem Kurs mit 30 Schülern nach zehn Minuten weg. Symptom: HTTP 429 `Rate limit exceeded: free-models-per-day`. `/sanity` in der App zeigt solche Modelle als **Tageslimit erreicht** (orange ⚠), `node scripts/sanity.mjs` als ✗ mit der Fehlermeldung. Vor jeder Fehlersuche also erst prüfen, ob es nur das Tageslimit ist — die Modelle sind nicht kaputt.
 
-Das Limit gilt **gemeinsam für alle** OpenRouter-Modelle in `models.json` (aktuell North Mini Code, MiniMax M3, Nemotron, Free Models Router). Deshalb steht als Standard bewusst ein Google-Modell — sonst läuft der komplette Unterrichtsalltag durch diesen einen Topf.
+Das Limit gilt **gemeinsam für alle** OpenRouter-Modelle in `models.json` (aktuell North Mini Code, Nemotron, Free Models Router). Deshalb steht als Standard bewusst ein Google-Modell — sonst läuft der komplette Unterrichtsalltag durch diesen einen Topf.
 
 **Google AI Studio:** ebenfalls ein Free Tier mit Limits, aber **pro Modell** statt aus einem gemeinsamen Topf — Gemini Flash Lite und Gemma haben getrennte Kontingente. Google veröffentlicht die Zahlen nicht mehr in den Docs; die tatsächlichen Limits des Keys stehen unter https://aistudio.google.com/rate-limit
 
@@ -217,7 +215,9 @@ Gemessen mit dem echten App-Prompt und dem Schul-Key, mehrere Läufe je Modell:
 | gemini-3.6-flash | 1/3 erfolgreich (sonst HTTP 503), dann 95–101 Zeilen vollständig | 7,6s |
 | gemini-3.7-flash / gemini-3.8-flash | **0/3** — durchgehend HTTP 503 „high demand" | 4,2s |
 | gemini-3.5-flash-lite | 0/1 — gar kein Code | 20,4s |
-| MiniMax M3 | 220 Zeilen vollständig (18s) | 3,5s |
+| MiniMax M3 (seit 2026-11 nicht mehr frei, entfernt) | 220 Zeilen vollständig (18s) | 3,5s |
+| North Mini Code (2026-11-19) | 265 Zeilen vollständig (15s) | — |
+| Nemotron 3.5 Super VL (2026-11-19) | 326 Zeilen vollständig (83s) | — |
 | Free Models Router | 99–218 Zeilen vollständig (27–51s) | 6,8–14,2s |
 
 **Warum Flash Lite trotzdem Standard ist:** nicht weil es das stärkste ist, sondern weil es als einziges zuverlässig antwortet und beim häufigen Fall (kleine Edits) das schnellste ist. Die starken Flash-Modelle sind im Free Tier kapazitätsgedeckelt. Der 503 kommt als retryable durch, die Fallback-Kette greift also korrekt.

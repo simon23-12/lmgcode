@@ -207,7 +207,10 @@ async function testModel(provider, id) {
 
 function fehler(status, msg, t0) {
   const s = Number(status);
+  // 503/529 = Kapazitätsdeckel im Free Tier ("high demand") — vorübergehend,
+  // also NICHT tot. Sonst tauscht --apply ein funktionierendes Modell weg.
   const kind = s === 429 ? 'rate-limited'
+             : (s === 503 || s === 529) ? 'überlastet'
              : (s === 404 || s === 400) ? 'unbekannt'
              : s === 401 || s === 403 ? 'auth'
              : 'offline';
@@ -271,13 +274,14 @@ for (const m of befund) {
 
 // ── Bericht ──────────────────────────────────────────────────────────────────
 
-const SYM = { online: '✓', 'rate-limited': '✓', timeout: '⏱', offline: '✗', unbekannt: '✗', auth: '!', 'übersprungen': '·' };
+const SYM = { online: '✓', 'rate-limited': '✓', 'überlastet': '⚠', timeout: '⏱', offline: '✗', unbekannt: '✗', auth: '!', 'übersprungen': '·' };
 
 log(`\nBestand (${cfg.models.length} Modelle in models.json)\n`);
 for (const m of befund) {
   const hinweise = [];
   if (KATALOG[m.provider] && !m.imKatalog) hinweise.push('nicht mehr im Katalog');
   if (m.test.status === 'rate-limited')    hinweise.push('gedrosselt');
+  if (m.test.status === 'überlastet')      hinweise.push('überlastet (503, vorübergehend)');
   if (m.test.status === 'timeout')         hinweise.push('Timeout');
   if (['offline', 'unbekannt', 'auth'].includes(m.test.status)) hinweise.push(kurz(m.test.error));
   if (m.katalog && m.katalog.ctx && m.katalog.ctx < MIN_CTX) hinweise.push(`nur ${Math.round(m.katalog.ctx / 1000)}K Kontext`);

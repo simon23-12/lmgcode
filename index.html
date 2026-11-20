@@ -421,8 +421,7 @@
             <option value="geminiflashlite" selected>Gemini 3.1 Flash Lite</option>
             <option value="geminiflash">Gemini 3.6 Flash</option>
             <option value="north">North Mini Code</option>
-            <option value="minimax">MiniMax M3</option>
-            <option value="nemotron">Nemotron 3 Super</option>
+            <option value="nemotron">Nemotron 3.5 Super</option>
             <option value="gemma">Gemma 4 31B</option>
             <option value="qwen">Qwen3.8-27B</option>
             <option value="gptoss">GPT-OSS 120B</option>
@@ -488,31 +487,29 @@ const SLASH_MODEL_NAMES = {
   geminiflashlite: 'Gemini 3.1 Flash Lite',
   geminiflash:     'Gemini 3.6 Flash',
   north:           'North Mini Code',
-  minimax:         'MiniMax M3',
-  nemotron:        'Nemotron 3 Super',
+  nemotron:        'Nemotron 3.5 Super',
   gemma:           'Gemma 4 31B',
   qwen:            'Qwen3.8-27B',
   gptoss:          'GPT-OSS 120B',
   free:            'Free Models Router',
 };
 
-const MODEL_HOTKEYS = { '1': 'north', '2': 'minimax', '3': 'nemotron', '4': 'gemma', '5': 'geminiflashlite', '6': 'qwen' };
-const MODEL_HOTKEY_HINT = '1&nbsp;North&nbsp;&nbsp;2&nbsp;MiniMax&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;&nbsp;6&nbsp;Qwen3.8-27';
+const MODEL_HOTKEYS = { '1': 'north', '2': 'gptoss', '3': 'nemotron', '4': 'gemma', '5': 'geminiflashlite', '6': 'qwen' };
+const MODEL_HOTKEY_HINT = '1&nbsp;North&nbsp;&nbsp;2&nbsp;GPT-OSS&nbsp;&nbsp;3&nbsp;Nemotron&nbsp;&nbsp;4&nbsp;Gemma&nbsp;&nbsp;5&nbsp;Gemini&nbsp;&nbsp;6&nbsp;Qwen3.8-27';
 
 const FALLBACK_CHAINS = {
-  geminiflashlite: ['geminiflashlite', 'north', 'minimax', 'nemotron', 'gemma'],
-  geminiflash:     ['geminiflash', 'geminiflashlite', 'minimax', 'north', 'gemma'],
-  north:           ['north', 'geminiflashlite', 'minimax', 'nemotron', 'gemma'],
-  minimax:         ['minimax', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
-  nemotron:        ['nemotron', 'geminiflashlite', 'north', 'minimax', 'gemma'],
-  gemma:           ['gemma', 'north', 'geminiflashlite', 'minimax', 'nemotron'],
-  qwen:            ['qwen', 'geminiflashlite', 'north', 'minimax', 'nemotron'],
-  gptoss:          ['gptoss', 'geminiflashlite', 'north', 'minimax', 'nemotron'],
-  free:            ['free', 'geminiflashlite', 'north', 'minimax', 'nemotron'],
+  geminiflashlite: ['geminiflashlite', 'north', 'nemotron', 'gemma', 'qwen'],
+  geminiflash:     ['geminiflash', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
+  north:           ['north', 'geminiflashlite', 'nemotron', 'gemma', 'qwen'],
+  nemotron:        ['nemotron', 'geminiflashlite', 'north', 'gemma', 'qwen'],
+  gemma:           ['gemma', 'north', 'geminiflashlite', 'nemotron', 'qwen'],
+  qwen:            ['qwen', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
+  gptoss:          ['gptoss', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
+  free:            ['free', 'geminiflashlite', 'north', 'nemotron', 'gemma'],
 };
 
 // Think → Code: diese Modelle bekommen bei komplexen Prompts erst eine Planungsanfrage.
-const PLAN_MODELS = new Set(['north', 'minimax', 'nemotron']);
+const PLAN_MODELS = new Set(['north', 'nemotron']);
 // </models:maps>
 
 // ── 1. State ─────────────────────────────────────────────────────────────────
@@ -2643,7 +2640,7 @@ function neubauHinweis(text, agent) {
   const hatInhalt = Object.keys(vfs).some(pfad => (vfs[pfad].content || '').trim() !== '');
   if (hatInhalt) return;
   agent.neubauHinweisGezeigt = true;
-  sysMsgHtml('Tipp: Für größere Neubauten liefern <b>MiniMax M3</b>, <b>Gemini 3.6 Flash</b> oder der <b>Free Models Router</b> deutlich mehr — oben im Dropdown wählbar. Für kleine Änderungen ist das aktuelle Modell schneller.');
+  sysMsgHtml('Tipp: Für größere Neubauten liefern <b>North Mini Code</b>, <b>Gemini 3.6 Flash</b> oder der <b>Free Models Router</b> deutlich mehr — oben im Dropdown wählbar. Für kleine Änderungen ist das aktuelle Modell schneller.');
 }
 
 // Fehler aus einem SSE-Payload vereinheitlichen. Unser Backend schickt
@@ -2673,6 +2670,8 @@ function freundlicherFehler(text) {
     return 'Das Modell ist gerade überlastet. Gleich nochmal versuchen oder oben ein anderes Modell wählen.';
   if (/rate.?limit|quota/i.test(t))
     return 'Zu viele Anfragen in kurzer Zeit. Kurz warten oder oben ein anderes Modell wählen.';
+  if (/abgebrochen|parse stream/i.test(t))
+    return 'Die Verbindung zum Modell ist mitten in der Antwort abgerissen. Bitte nochmal senden — an deinem Code wurde nichts verändert.';
   if (/context|token.*limit|too long/i.test(t))
     return 'Das Projekt ist zu groß für dieses Modell. Schließe ein paar Tabs oder wähle ein Modell mit mehr Kontext.';
   return t || 'Unbekannter Fehler.';
@@ -2686,6 +2685,7 @@ function extractProse(text) {
     .replace(/```[\s\S]*?```/g, ' ')                                                                  // fertige Codeblöcke
     .replace(/```[\s\S]*$/, ' ')                                                                      // abgeschnittener Block
     .replace(/^[^\S\n]*<{4,10}[^\S\n]*SEARCH[\s\S]*?^[^\S\n]*>{4,10}[^\S\n]*REPLACE[^\n]*$/gm, ' ')  // nackte SR-Blöcke
+    .replace(/^[^\S\n]*<{4,10}[^\S\n]*SEARCH[\s\S]*$/m, ' ')                                         // abgeschnittener SR-Block
     .replace(/^[^\S\n]*[<>=]{4,10}[^\n]*$/gm, '')                                                    // übrige Marker
     .replace(/^#{1,6}\s*/gm, '')                                                                      // Überschriften
     .replace(/^\s*[-*+]\s+/gm, '\u0001');                                                             // Aufzählungszeichen markieren
@@ -2812,6 +2812,14 @@ function strippeRandmarker(text) {
 
 const SR_MARKER = /^[^\S\n]*<{4,10}[^\S\n]*SEARCH/m;
 
+// Steht nach dem letzten SEARCH-Marker kein REPLACE-Marker mehr, ist die Antwort
+// mitten in einem Block abgeschnitten.
+function hatOffenenSRBlock(text) {
+  const s = [...String(text).matchAll(/^[^\S\n]*<{4,10}[^\S\n]*SEARCH/gm)].pop();
+  if (!s) return false;
+  return !/^[^\S\n]*>{4,10}[^\S\n]*REPLACE/m.test(text.slice(s.index));
+}
+
 // Dateinamen erkennen — im Fence-Bezeichner (```script.js, ```html:index.html,
 // ```js title="spiel.js") oder in einer Zeile direkt vor dem Block
 // (**about.html**, `style.css`:, ### index.html, "In script.js:").
@@ -2854,7 +2862,10 @@ function sammleCodeBloecke(text) {
     const sprache = info.split(/[\s:]/)[0] || '';
     const davor = text.slice(0, m.index).replace(/\s+$/, '').split('\n').pop() || '';
     const name = dateinameAusInfo(info) || dateinameAusZeile(davor, sprache);
-    out.push([m[0], name || sprache, m[3]]);
+    // Fehlt das schließende ```, hängt der Abschlusssatz des Modells am Code
+    // ("</html>\nIch habe ein Flappy Bird gebaut.") — hinter </html> ist nie Code.
+    const code = m[3].replace(/(<\/html>[^\S\n]*)\n(?![\s\S]*<\/html>)[\s\S]*$/i, '$1\n');
+    out.push([m[0], name || sprache, code]);
   }
   return out;
 }
@@ -3043,8 +3054,11 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
   }
 
   if (!res.ok) {
-    try { const d = await res.json(); return { error: d.error, retryable: res.status === 429 || res.status === 503 }; }
-    catch { return { error: 'Serverfehler', retryable: res.status === 429 || res.status === 503 }; }
+    // 500/502/504 = Funktion abgestürzt oder Gateway-Fehler — beim nächsten Modell
+    // sieht das anders aus. Vorher brach die Kette hier mit "Serverfehler" ab.
+    const retryable = [429, 500, 502, 503, 504].includes(res.status);
+    try { const d = await res.json(); return { error: d.error, retryable: d.retryable ?? retryable }; }
+    catch { return { error: 'Serverfehler', retryable }; }
   }
 
   // Stream connected — only now dismiss the typing indicator
@@ -3170,6 +3184,11 @@ async function fetchStream(builtPrompt, modelKey, onStreamStart, onSRDetected, a
 
   // Stream ended without [DONE] and no content → retryable (Vercel/model timeout)
   if (!gotDone && !fullText) return { error: 'Timeout', retryable: true };
+  // Verbindung mitten in einem SEARCH/REPLACE-Block abgerissen (z.B. Google-Stream
+  // bricht ab, Funktion stirbt): Der Rest der Änderung fehlt. Als Erfolg gewertet
+  // käme nur eine halbe Änderung an und der Code des offenen Blocks landete im Chat.
+  // Lieber das nächste Modell der Kette fragen.
+  if (!gotDone && hatOffenenSRBlock(fullText)) return { error: 'Antwort mitten in der Änderung abgebrochen', retryable: true };
 
   return {
     text: fullText,
@@ -3358,7 +3377,10 @@ async function sendMessage() {
         // genannt werden kann statt nur "nicht erreichbar".
         if (result.error) letzterFehler = result.error;
         if (!result.retryable) { sysMsgHtml(freundlicherFehler(result.error)); errorHandled = true; break; }
-        // retryable (timeout / 429) → try next model in chain
+        // retryable (timeout / 429 / abgerissener Stream) → nächstes Modell, aber erst
+        // zurückrollen, was das gescheiterte Modell schon live in die Datei geschrieben hat.
+        streamZielZuruecksetzen(agent);
+        agent.srStreamBase = null; agent.srStreamPfad = null;
       }
     } catch (err) {
       networkError = true;
@@ -3399,6 +3421,10 @@ async function sendMessage() {
       data = null;
     }
   }
+
+  // Ohne verwertbare Antwort darf nichts vom Live-Streaming in der Datei bleiben —
+  // sonst steht dort eine halbe Änderung, von der der Schüler nichts weiß.
+  if (!data) { streamZielZuruecksetzen(agent); agent.srStreamBase = null; }
 
   if (networkError) {
     sysMsg('Netzwerkfehler – bitte erneut versuchen. (Details in der Browser-Konsole)');
@@ -3497,6 +3523,7 @@ async function sendMessage() {
         if (!srPfade.includes(activeTab)) openTab(srPfade[0]);
         renderTree();
         reportSRFailures(srResult);
+        if (hatOffenenSRBlock(data.text)) sysMsgHtml('⚠ Die Antwort des Modells war abgeschnitten — die letzte Änderung fehlt. Schreib „mach weiter" oder wähle oben ein anderes Modell.');
       }
 
       if (fileBlocks.length) {

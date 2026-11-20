@@ -13,8 +13,7 @@ const MODEL_MAP = {
   geminiflashlite: 'geminiflashlite',
   geminiflash:     'geminiflash',
   north:           'cohere/north-mini-code:free',
-  minimax:         'minimax/minimax-m3:free',
-  nemotron:        'nvidia/nemotron-3-super-120b-a12b:free',
+  nemotron:        'nvidia/nemotron-3.5-super-vl:free',
   gemma:           'gemma',
   qwen:            'qwen/qwen3.8-27b',
   gptoss:          'openai/gpt-oss-120b',
@@ -138,6 +137,11 @@ async function streamGoogleAI(prompt, googleModel, res) {
   const gModel = genAI.getGenerativeModel({ model: googleModel });
   try {
     const result = await gModel.generateContentStream(prompt);
+    // Bricht Googles Stream mittendrin ab ("Failed to parse stream"), lässt das SDK
+    // AUCH result.response scheitern. Unbehandelt killt das den ganzen Prozess —
+    // der Browser bekommt eine abgeschnittene Antwort ohne [DONE] und ohne Fehler,
+    // hält sie für fertig, und der halbe SEARCH/REPLACE-Block landet im Chat.
+    result.response.catch(() => {});
     for await (const chunk of result.stream) {
       const parts = chunk.candidates?.[0]?.content?.parts ?? [];
       const text = parts.filter(p => !p.thought).map(p => p.text ?? '').join('');
@@ -150,15 +154,21 @@ async function streamGoogleAI(prompt, googleModel, res) {
       res.write(`data: ${JSON.stringify({ usage: { prompt_tokens: meta.promptTokenCount ?? 0, completion_tokens: meta.candidatesTokenCount ?? 0 } })}\n\n`);
     }
   } catch (err) {
-    const msg = err.message?.toLowerCase() || '';
-    const retryable =
-      err.status === 429 || err.status === 503 ||
-      msg.includes('429') || msg.includes('503') || msg.includes('rate limit') || msg.includes('overload') ||
-      msg.includes('quota') || msg.includes('resource_exhausted');
     const e = new Error(err.message || 'Google AI Fehler.');
-    if (!retryable) e.fatal = true;
+    if (googleFehlerIstFatal(err)) e.fatal = true;
     throw e;
   }
+}
+
+// Fatal sind nur Fehler, die beim nächsten Versuch genauso kämen: kaputter Key,
+// ungültige Anfrage, unbekanntes Modell. Alles andere (503, 500, abgebrochener
+// oder unlesbarer Stream, Netzwerk) ist vorübergehend — dann soll die
+// Fallback-Kette das nächste Modell probieren, statt aufzugeben.
+function googleFehlerIstFatal(err) {
+  const msg = err.message?.toLowerCase() || '';
+  if ([429, 500, 502, 503, 504].includes(err.status)) return false;
+  if (/\b(429|500|502|503|504)\b|rate limit|overload|quota|resource_exhausted|high demand|unavailable|parse stream|fetch failed|timeout|econnreset|socket/.test(msg)) return false;
+  return [400, 401, 403, 404].includes(err.status) || /\b(400|401|403|404)\b|api key|permission|invalid argument|not found/.test(msg);
 }
 
 async function tryOpenRouter(prompt, orModel) {
@@ -308,12 +318,7 @@ async function tryGoogleAI(prompt, googleModel) {
       completionTokens: meta.candidatesTokenCount ?? null,
     };
   } catch (err) {
-    const msg = err.message?.toLowerCase() || '';
-    const retryable =
-      err.status === 429 || err.status === 503 ||
-      msg.includes('429') || msg.includes('503') || msg.includes('rate limit') || msg.includes('overload') ||
-      msg.includes('quota') || msg.includes('resource_exhausted');
-    if (!retryable) {
+    if (googleFehlerIstFatal(err)) {
       const fatal = new Error(err.message || 'Google AI Fehler.');
       fatal.fatal = true;
       throw fatal;
