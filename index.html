@@ -41,7 +41,7 @@
     body.light-mode .chat-msg.bot pre { background: #f0f0f0; }
     body.light-mode .chat-msg.bot code { background: rgba(0,0,0,0.07); }
     body.light-mode .chat-msg.bot strong { color: #000; }
-    body.light-mode #ctx-menu { background: #ffffff; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+    body.light-mode #ctx-menu, body.light-mode .ctx-menu { background: #ffffff; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
     body.light-mode .ctx-item:hover { background: rgba(0,0,0,0.06); }
     body.light-mode #header-byline .sep { color: rgba(255,255,255,0.4); }
 
@@ -340,7 +340,7 @@
     #chat-stats span { opacity: 0.7; }
 
     /* ── Context Menu ── */
-    #ctx-menu {
+    #ctx-menu, .ctx-menu {
       position: fixed; z-index: 1000; background: #2d2d2d; border: 1px solid var(--border);
       border-radius: 5px; box-shadow: 0 4px 16px rgba(0,0,0,0.5); padding: 4px 0;
       min-width: 130px; display: none;
@@ -468,6 +468,11 @@
 </div>
 
 <!-- Context Menu -->
+<div id="open-menu" class="ctx-menu">
+  <div class="ctx-item" id="open-folder"><i class="fa-solid fa-folder-open"></i> Ordner öffnen</div>
+  <div class="ctx-item" id="open-files"><i class="fa-solid fa-file-code"></i> Datei(en) öffnen</div>
+</div>
+
 <div id="ctx-menu">
   <div class="ctx-item" id="ctx-rename"><i class="fa-solid fa-pencil"></i> Umbenennen</div>
   <div class="ctx-item danger" id="ctx-delete"><i class="fa-solid fa-trash"></i> Löschen</div>
@@ -475,6 +480,7 @@
 
 <!-- Hidden file inputs -->
 <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
+<input type="file" id="file-input" multiple style="display:none">
 
 <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
@@ -522,6 +528,7 @@ let activeTab     = null;
 let editor        = null;
 let aiCheckFixes  = new Map(); // key: "line:col" → fix string
 let liveMode   = true;
+let fileHandles = {};   // path → FileSystemFileHandle (nur bei Einzeldatei-Öffnen)
 let dirHandle  = null;  // File System Access API handle (wenn Ordner via showDirectoryPicker geöffnet)
 let awaitingGitUrl = false; // true = nächste Chat-Eingabe wird als GitHub-URL behandelt
 
@@ -716,6 +723,7 @@ function addFile(rawPath, content) {
 }
 
 function clearVFS() {
+  fileHandles = {};
   Object.values(vfs).forEach(f => { if (f.model) { f.model.dispose(); f.model = null; } });
   Object.keys(vfs).forEach(k => delete vfs[k]);
   openTabs = [];
@@ -990,8 +998,67 @@ function initMonaco() {
 
 // ── 6. File Upload & Save ─────────────────────────────────────────────────────
 
-// Öffnen: versuche showDirectoryPicker (Chrome/Edge), fallback auf file input (Firefox)
-document.getElementById('btn-folder').onclick = async () => {
+// Öffnen: kleines Menü — ganzer Ordner oder einzelne Datei(en)
+const openMenu = document.getElementById('open-menu');
+document.getElementById('btn-folder').onclick = e => {
+  e.stopPropagation();
+  if (openMenu.style.display === 'block') { openMenu.style.display = 'none'; return; }
+  const r = e.currentTarget.getBoundingClientRect();
+  openMenu.style.left = r.left + 'px';
+  openMenu.style.top  = (r.bottom + 4) + 'px';
+  openMenu.style.display = 'block';
+};
+document.addEventListener('click', () => { openMenu.style.display = 'none'; });
+document.getElementById('open-folder').onclick = () => { openMenu.style.display = 'none'; oeffneOrdner(); };
+document.getElementById('open-files').onclick  = () => { openMenu.style.display = 'none'; oeffneDateien(); };
+
+// Einzelne Dateien: ersetzen das Projekt wie ein Ordner und werden alle als Tab geöffnet.
+// Mit showOpenFilePicker (Chrome/Edge) merken wir uns die Handles → „Speichern" schreibt zurück.
+
+async function ladeEinzeldateien(eintraege) {  // [{ file, handle? }]
+  dirHandle = null;
+  clearVFS();
+  const geladen = [];
+  for (const { file, handle } of eintraege) {
+    if (!isText(file.name)) { sysMsg(`„${file.name}" ist keine Textdatei und wurde übersprungen.`); continue; }
+    try {
+      addFile(file.name, await file.text());
+      if (handle) fileHandles[file.name] = handle;
+      geladen.push(file.name);
+    } catch {}
+  }
+  if (!geladen.length) { renderTree(); return; }
+  // HTML zuerst, damit Vorschau und Kontext gleich passen
+  geladen.sort((a, b) => (/\.html?$/i.test(b) - /\.html?$/i.test(a)));
+  geladen.slice(0, 8).forEach(openTab);
+  switchTab(geladen[0]);
+  renderTree();
+  sysMsg(geladen.length === 1 ? `Datei geöffnet: ${geladen[0]}` : `${geladen.length} Dateien geöffnet`);
+}
+
+async function oeffneDateien() {
+  if ('showOpenFilePicker' in window) {
+    try {
+      const handles = await window.showOpenFilePicker({ multiple: true });
+      const eintraege = [];
+      for (const h of handles) eintraege.push({ file: await h.getFile(), handle: h });
+      await ladeEinzeldateien(eintraege);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  document.getElementById('file-input').click();
+}
+
+document.getElementById('file-input').addEventListener('change', async function(e) {
+  const files = Array.from(e.target.files);
+  e.target.value = '';
+  if (files.length) await ladeEinzeldateien(files.map(file => ({ file })));
+});
+
+// Ordner: versuche showDirectoryPicker (Chrome/Edge), fallback auf file input (Firefox)
+async function oeffneOrdner() {
   if ('showDirectoryPicker' in window) {
     try {
       const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -1007,7 +1074,7 @@ document.getElementById('btn-folder').onclick = async () => {
     }
   }
   document.getElementById('folder-input').click();
-};
+}
 
 async function readDirHandle(handle, prefix) {
   for await (const [name, entry] of handle.entries()) {
@@ -1151,6 +1218,20 @@ document.getElementById('btn-save').onclick = async () => {
 
   const content = vfs[activeTab].model ? vfs[activeTab].model.getValue() : vfs[activeTab].content;
   const name    = activeTab.split('/').pop();
+
+  // Einzeln geöffnete Datei: direkt an ihren Platz zurückschreiben
+  if (fileHandles[activeTab]) {
+    try {
+      const wr = await fileHandles[activeTab].createWritable();
+      await wr.write(content);
+      await wr.close();
+      sysMsg(`${name} gespeichert.`);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      // keine Schreibrechte → unten per Speichern-Dialog
+    }
+  }
 
   if ('showSaveFilePicker' in window) {
     try {
@@ -1811,7 +1892,7 @@ function handleSlashCommand(text, agent) {
   }
 
   if (cmd === 'open') {
-    document.getElementById('btn-folder').click();
+    oeffneOrdner();
     return true;
   }
 
