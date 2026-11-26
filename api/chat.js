@@ -6,6 +6,7 @@ const GOOGLE_MODELS = {
   geminiflashlite35: "gemini-3.5-flash-lite",
   geminiflashlite:   "gemini-3.1-flash-lite",
   geminiflash:       "gemini-3.6-flash",
+  geminihydrogen:    "gemini-4-hydrogen",
   gemma:             "gemma-4-31b-it",
 };
 
@@ -14,6 +15,7 @@ const MODEL_MAP = {
   geminiflashlite35: 'geminiflashlite35',
   geminiflashlite:   'geminiflashlite',
   geminiflash:       'geminiflash',
+  geminihydrogen:    'geminihydrogen',
   nemotronultra:     'nvidia/nemotron-3-ultra-550b-a55b:free',
   nemotron:          'nvidia/nemotron-3.5-super-vl:free',
   gemma:             'gemma',
@@ -29,7 +31,7 @@ const MAX_TOKENS = {
   'openai/gpt-oss-120b': 65536,
 };
 
-const GOOGLE_TARGETS = new Set(['geminiflashlite35', 'geminiflashlite', 'geminiflash', 'gemma']);
+const GOOGLE_TARGETS = new Set(['geminiflashlite35', 'geminiflashlite', 'geminiflash', 'geminihydrogen', 'gemma']);
 const GROQ_TARGETS   = new Set(['qwen/qwen3.8-27b', 'openai/gpt-oss-120b']);
 
 function isGoogleModel(target) { return GOOGLE_TARGETS.has(target); }

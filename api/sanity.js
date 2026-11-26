@@ -12,6 +12,7 @@ const MODELS = [
   { name: 'Gemini 3.5 Flash Lite',  provider: 'google',      id: 'gemini-3.5-flash-lite' },
   { name: 'Gemini 3.1 Flash Lite',  provider: 'google',      id: 'gemini-3.1-flash-lite' },
   { name: 'Gemini 3.6 Flash',       provider: 'google',      id: 'gemini-3.6-flash' },
+  { name: 'Gemini 4 Hydrogen',      provider: 'google',      id: 'gemini-4-hydrogen' },
   { name: 'Nemotron 3 Ultra',       provider: 'openrouter',  id: 'nvidia/nemotron-3-ultra-550b-a55b:free' },
   { name: 'Nemotron 3.5 Super',     provider: 'openrouter',  id: 'nvidia/nemotron-3.5-super-vl:free' },
   { name: 'Gemma 4 31B',            provider: 'google',      id: 'gemma-4-31b-it' },

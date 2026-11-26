@@ -57,6 +57,23 @@
       ]
     },
     {
+      "key": "geminihydrogen",
+      "label": "Gemini 4 Hydrogen",
+      "provider": "google",
+      "id": "gemini-4-hydrogen",
+      "rank": 2.5,
+      "plan": false,
+      "fallback": false,
+      "_notiz": "Zum Testen (2026-11-26). Free Tier laut AI Studio nur 5 RPM / 20 RPD — fuer eine Klasse zu wenig, deshalb fallback:false. Eigene Kette faengt 429 ab.",
+      "chain": [
+        "geminihydrogen",
+        "geminiflashlite35",
+        "geminiflashlite",
+        "nemotronultra",
+        "nemotron"
+      ]
+    },
+    {
       "key": "nemotronultra",
       "label": "Nemotron 3 Ultra",
       "provider": "openrouter",

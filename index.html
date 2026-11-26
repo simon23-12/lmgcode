@@ -421,6 +421,7 @@
             <option value="geminiflashlite35" selected>Gemini 3.5 Flash Lite</option>
             <option value="geminiflashlite">Gemini 3.1 Flash Lite</option>
             <option value="geminiflash">Gemini 3.6 Flash</option>
+            <option value="geminihydrogen">Gemini 4 Hydrogen</option>
             <option value="nemotronultra">Nemotron 3 Ultra</option>
             <option value="nemotron">Nemotron 3.5 Super</option>
             <option value="gemma">Gemma 4 31B</option>
@@ -494,6 +495,7 @@ const SLASH_MODEL_NAMES = {
   geminiflashlite35: 'Gemini 3.5 Flash Lite',
   geminiflashlite:   'Gemini 3.1 Flash Lite',
   geminiflash:       'Gemini 3.6 Flash',
+  geminihydrogen:    'Gemini 4 Hydrogen',
   nemotronultra:     'Nemotron 3 Ultra',
   nemotron:          'Nemotron 3.5 Super',
   gemma:             'Gemma 4 31B',
@@ -509,6 +511,7 @@ const FALLBACK_CHAINS = {
   geminiflashlite35: ['geminiflashlite35', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
   geminiflashlite:   ['geminiflashlite', 'geminiflashlite35', 'nemotronultra', 'nemotron', 'gemma'],
   geminiflash:       ['geminiflash', 'geminiflashlite', 'nemotronultra', 'nemotron', 'gemma'],
+  geminihydrogen:    ['geminihydrogen', 'geminiflashlite35', 'geminiflashlite', 'nemotronultra', 'nemotron'],
   nemotronultra:     ['nemotronultra', 'geminiflashlite35', 'geminiflashlite', 'nemotron', 'gemma'],
   nemotron:          ['nemotron', 'geminiflashlite35', 'geminiflashlite', 'nemotronultra', 'gemma'],
   gemma:             ['gemma', 'nemotronultra', 'geminiflashlite35', 'geminiflashlite', 'nemotron'],
