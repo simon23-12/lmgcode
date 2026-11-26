@@ -1,0 +1,21 @@
+{
+  "titel": "Rückgängig machen wird dem Modell im Verlauf mitgeteilt",
+  "quelle": "Unterricht 2026-11-26: nach Rückgängig suchte das Modell weiter nach seinem zurückgenommenen Code",
+  "dateien": {
+    "shannon.html": "<!DOCTYPE html>\n<html>\n<body>\n<script>\nfunction startGame() {\n  score = 0;\n}\n</script>\n</body>\n</html>"
+  },
+  "aktiv": "shannon.html",
+  "modell": "geminiflashlite",
+  "frage": "starte das spiel mit einem intervall",
+  "antworten": [
+    {
+      "text": "<<<<<<< SEARCH\n  score = 0;\n=======\n  score = 0;\n  gameInterval = setInterval(update, 1000 / 60);\n>>>>>>> REPLACE\n\nIntervall eingebaut."
+    }
+  ],
+  "danachUndo": true,
+  "erwartet": {
+    "dateien": { "shannon.html": { "unveraendert": true } },
+    "verlaufEnthaelt": ["rückgängig"],
+    "requests": ["geminiflashlite"]
+  }
+}

@@ -212,6 +212,7 @@ export async function fuehreAus(page, fall, { nurDiesesModell = false } = {}) {
     }
     // sendMessage awaitet bis zum finally; Monaco-Updates laufen per rAF nach
     await new Promise(r => requestAnimationFrame(() => setTimeout(r, 30)));
+    if (fall.danachUndo) document.getElementById('undo-btn').click();
 
     const dateien = {};
     for (const [p, f] of Object.entries(vfs)) dateien[p] = f.model ? f.model.getValue() : f.content;
@@ -227,6 +228,7 @@ export async function fuehreAus(page, fall, { nurDiesesModell = false } = {}) {
       aktiv: activeTab, offen: openTabs.slice(),
       requests: window.__replay ? window.__replay.requests.map(r => r.model) : null,
       undo: agent.undoSnapshot ? agent.undoSnapshot.map(s => s.path) : [],
+      verlauf: agent.chatHistory.map(m => `${m.role}: ${m.text}`).join('\n'),
       ms: Math.round(performance.now() - t0),
     };
   }, { fall, nurDiesesModell });
@@ -239,6 +241,7 @@ export async function fuehreAus(page, fall, { nurDiesesModell = false } = {}) {
 //   irgendeineDatei: { regex: [] },   // mind. eine Datei passt (Neubau: Dateiname offen)
 //   keinCodeImChat: true,   // Standard: an
 //   chatEnthaelt: [], chatEnthaeltNicht: [],
+//   verlaufEnthaelt: [],    // agent.chatHistory nach der Antwort (danachUndo: true → erst Rückgängig klicken)
 //   requests: ["geminiflashlite", "north"],   // exakte Modellfolge (nur Replay)
 //   aktiv: "index.html",
 //   keineNeuenDateien: true
@@ -284,6 +287,7 @@ export function pruefe(fall, erg, konsolenFehler = []) {
   const chat = erg.nachrichten.map(n => n.text).join('\n');
   for (const s of e.chatEnthaelt || []) if (!chat.includes(s)) inhalt(`Chat enthält nicht ${JSON.stringify(s)}`);
   for (const s of e.chatEnthaeltNicht || []) if (chat.includes(s)) inhalt(`Chat enthält unerwartet ${JSON.stringify(s)}`);
+  for (const s of e.verlaufEnthaelt || []) if (!(erg.verlauf || '').includes(s)) inhalt(`Verlauf fürs Modell enthält nicht ${JSON.stringify(s)}`);
   if (e.requests && erg.requests && JSON.stringify(e.requests) !== JSON.stringify(erg.requests))
     inhalt(`Modellfolge ${JSON.stringify(erg.requests)}, erwartet ${JSON.stringify(e.requests)}`);
   if (e.aktiv && erg.aktiv !== e.aktiv) inhalt(`aktiver Tab ${erg.aktiv}, erwartet ${e.aktiv}`);

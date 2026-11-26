@@ -1,0 +1,22 @@
+{
+  "titel": "Fence mit Dateinamen, der Leerzeichen enthält — vorhandene Datei, keine Kopie",
+  "quelle": "Unterricht 2026-11-26, Gemini 3.5 Flash Lite: ```präsnetation claude shannon.html wurde zu neuer Datei shannon.html (+460)",
+  "dateien": {
+    "präsnetation claude shannon.html": "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Claude Shannon</title>\n</head>\n<body>\n  <button id=\"bitflieger\">Bit-Flieger</button>\n  <h1>Claude Shannon</h1>\n  <p>Vater der Informationstheorie.</p>\n</body>\n</html>"
+  },
+  "aktiv": "präsnetation claude shannon.html",
+  "modell": "geminiflashlite",
+  "frage": "kann der bit flieger button mein spiel starten?",
+  "antworten": [
+    {
+      "text": "Schaue mir die Dateien an.\n\n```präsnetation claude shannon.html\n<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Claude Shannon</title>\n</head>\n<body>\n  <button id=\"bitflieger\" onclick=\"startGame()\">Bit-Flieger</button>\n  <h1>Claude Shannon</h1>\n  <p>Vater der Informationstheorie.</p>\n  <canvas id=\"canvas\" width=\"360\" height=\"240\"></canvas>\n  <script>\n    function startGame() {\n      document.getElementById('canvas').style.display = 'block';\n    }\n  </script>\n</body>\n</html>\n```\n\nBit-Flieger-Button startet jetzt das Spiel."
+    }
+  ],
+  "erwartet": {
+    "dateien": {
+      "präsnetation claude shannon.html": { "enthaelt": ["onclick=\"startGame()\"", "function startGame", "Vater der Informationstheorie"] }
+    },
+    "keineNeuenDateien": true,
+    "requests": ["geminiflashlite"]
+  }
+}

@@ -1484,7 +1484,7 @@ neuer Code
 6. Mehrere Dateien gleichzeitig: Mehrere Codeblöcke mit je eigenem Dateinamen ausgeben — alle werden automatisch angelegt.
 WICHTIG bei neuen Projekten mit mehreren Dateien: Wenn die aktuelle Datei "Unbenannt" oder leer ist, ignoriere sie — erstelle einfach die neuen Projektdateien mit den richtigen Namen (z.B. index.html, style.css, script.js). Benenne "Unbenannt" NICHT um.
 VERBOTEN: Niemals nur einen Teil ausgeben (löscht den Rest). Wenn unklar: SEARCH/REPLACE. Niemals denselben Inhalt in mehrere Dateien kopieren.
-Der SEARCH-Text muss exakt so im Original stehen (Leerzeichen und Einrückung beachten).
+Der SEARCH-Text muss exakt so im Original stehen (Leerzeichen und Einrückung beachten). Nimm ihn aus den PROJEKTDATEIEN oben, NICHT aus deinen früheren Antworten — die können rückgängig gemacht oder nicht angewendet worden sein.
 
 ABSCHLUSS: Schreibe nach dem Code genau EINEN kurzen Satz (max. 15 Wörter) in der Sprache des Schülers — was du geändert oder gefixt hast, nicht was der Code tut.
 Beispiele: "Vogel ist jetzt rot statt gelb." · "Kollision mit den Röhren gefixt — du prallst jetzt ab." · "Punktezähler eingebaut."
@@ -1506,7 +1506,7 @@ ABSCHLUSS: Schreibe nach dem Code genau EINEN kurzen Satz (max. 15 Wörter) in d
   if (agent.chatHistory.length > 0) {
     p += '\n### BISHERIGES GESPRÄCH ###\n';
     agent.chatHistory.slice(-10).forEach(m => {
-      p += `${m.role === 'user' ? 'Schüler' : 'Helper'}: "${m.text}"\n`;
+      p += `${m.role === 'user' ? 'Schüler' : m.role === 'app' ? 'App-Hinweis' : 'Helper'}: "${m.text}"\n`;
     });
   }
 
@@ -1544,7 +1544,7 @@ Gib aus:
   if (agent.chatHistory.length > 0) {
     p += '\n### BISHERIGES GESPRÄCH ###\n';
     agent.chatHistory.slice(-6).forEach(m => {
-      p += `${m.role === 'user' ? 'Schüler' : 'Helper'}: "${m.text}"\n`;
+      p += `${m.role === 'user' ? 'Schüler' : m.role === 'app' ? 'App-Hinweis' : 'Helper'}: "${m.text}"\n`;
     });
   }
 
@@ -2109,6 +2109,8 @@ document.getElementById('undo-btn').onclick = () => {
     // Switch to the affected file so user sees the result
     if (!stände.some(s => s.path === activeTab)) openTab(zuletzt);
     sysMsg(stände.length > 1 ? `Letzte KI-Änderung rückgängig gemacht (${stände.length} Dateien).` : 'Letzte KI-Änderung rückgängig gemacht.');
+    // Das Modell muss wissen, dass sein Code nicht mehr drin ist — sonst baut es darauf auf.
+    agent.chatHistory.push({ role: 'app', text: `Der Schüler hat die letzte Änderung rückgängig gemacht (${stände.map(s => s.path).join(', ')}). Der Code aus der letzten Antwort ist NICHT mehr in den Dateien; maßgeblich ist der Stand unter PROJEKTDATEIEN.` });
   }
   agent.undoSnapshot = null;
   document.getElementById('undo-btn').classList.remove('visible');
@@ -2929,7 +2931,23 @@ const SPRACHE_ZU_ENDUNG = { javascript: 'js', js: 'js', html: 'html', css: 'css'
   java: 'java', typescript: 'ts', ts: 'ts', c: 'c', cpp: 'cpp', 'c++': 'cpp', csharp: 'cs', cs: 'cs',
   ruby: 'rb', go: 'go', rust: 'rs', haskell: 'hs', swift: 'swift', json: 'json', markdown: 'md', md: 'md' };
 
+// Dateinamen mit Leerzeichen oder Umlauten ("präsnetation claude shannon.html") zerfallen
+// beim Zerlegen in Wörter zu "shannon.html" — dann legte die App eine neue Datei mit der
+// ganzen Seite an, statt die vorhandene zu ändern (Unterricht 2026-11-26). Deshalb zuerst
+// gegen die vorhandenen Dateien prüfen: ganzer Text = Pfad, oder er endet auf den Pfad.
+function vorhandeneDateiIn(text) {
+  const s = String(text || '').trim().replace(/^["'`]+/, '').replace(/["'`]*\s*:?$/, '').replace(/^\.\//, '');
+  if (!s || typeof vfs === 'undefined') return null;
+  if (vfs[s] && !vfs[s].binary) return s;
+  const endetAuf = n => s === n || (s.endsWith(n) && /\s/.test(s[s.length - n.length - 1]));
+  const pfade = Object.keys(vfs).filter(p => !vfs[p].binary && !DATEINAME.test(p.split('/').pop()))
+    .sort((a, b) => b.length - a.length);
+  return pfade.find(p => endetAuf(p)) || pfade.find(p => endetAuf(p.split('/').pop())) || null;
+}
+
 function dateinameAusInfo(info) {
+  const vorhanden = vorhandeneDateiIn(info);
+  if (vorhanden) return vorhanden;
   for (const t of String(info || '').split(/[\s:=,]+/)) {
     const kandidat = t.replace(/^["'`]+|["'`]+$/g, '').replace(/^\.\//, '');
     if (DATEINAME.test(kandidat)) return kandidat;
@@ -2938,6 +2956,8 @@ function dateinameAusInfo(info) {
 }
 
 function dateinameAusZeile(zeile, sprache) {
+  const vorhanden = vorhandeneDateiIn(String(zeile).replace(/[*_`#>]/g, ''));
+  if (vorhanden) return vorhanden;
   const m = String(zeile).trim()
     .match(/^(?:[#>*_\s-]*[^`*\n]{0,40}?\s)?[*_`]*([\w.\/-]+\.[a-z][a-z0-9]{0,5})[*_`]*\s*:?\s*[*_]*$/i);
   if (!m || !DATEINAME.test(m[1])) return null;
@@ -3737,6 +3757,13 @@ async function sendMessage() {
 
       agent.chatHistory.push({ role: 'user', text });
       agent.chatHistory.push({ role: 'bot',  text: data.text });
+      // Sonst hält das Modell seine gescheiterte Änderung für angewendet und sucht in der
+      // nächsten Antwort nach deren REPLACE-Text — eine Kette von Fehlschlägen (2026-11-26).
+      if (SR_MARKER.test(data.text) && !srResult) {
+        agent.chatHistory.push({ role: 'app', text: 'Die SEARCH/REPLACE-Änderung aus der letzten Antwort wurde NICHT angewendet — der SEARCH-Text stand so nicht in der Datei. Die Dateien sind unverändert; maßgeblich ist der Stand unter PROJEKTDATEIEN.' });
+      } else if (srResult?.failed?.length) {
+        agent.chatHistory.push({ role: 'app', text: `Nur ${srResult.count} von ${srResult.blocks} SEARCH/REPLACE-Blöcken wurden angewendet. NICHT angewendet (SEARCH-Text nicht gefunden): ${srResult.failed.join(' | ')}` });
+      }
       if (agent.chatHistory.length > 20) agent.chatHistory = agent.chatHistory.slice(-20);
 
       const ct = data.completionTokens ?? null;

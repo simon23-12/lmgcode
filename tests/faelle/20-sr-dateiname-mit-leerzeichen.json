@@ -1,0 +1,24 @@
+{
+  "titel": "SEARCH/REPLACE im Fence mit Leerzeichen-Dateinamen, andere Datei aktiv",
+  "quelle": "Unterricht 2026-11-26 (Variante von Fall 19)",
+  "dateien": {
+    "präsnetation claude shannon.html": "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <title>Claude Shannon</title>\n</head>\n<body>\n  <h1>Claude Shannon</h1>\n</body>\n</html>",
+    "shannon.html": "<!DOCTYPE html>\n<html lang=\"de\">\n<head>\n  <title>Bit-Flieger</title>\n</head>\n<body>\n  <h1>Claude Shannon</h1>\n</body>\n</html>"
+  },
+  "aktiv": "shannon.html",
+  "modell": "geminiflashlite",
+  "frage": "in der präsentation die überschrift grün",
+  "antworten": [
+    {
+      "text": "```präsnetation claude shannon.html\n<<<<<<< SEARCH\n  <h1>Claude Shannon</h1>\n=======\n  <h1 style=\"color: green\">Claude Shannon</h1>\n>>>>>>> REPLACE\n```\n\nÜberschrift ist jetzt grün."
+    }
+  ],
+  "erwartet": {
+    "dateien": {
+      "präsnetation claude shannon.html": { "enthaelt": ["color: green"] },
+      "shannon.html": { "unveraendert": true }
+    },
+    "keineNeuenDateien": true,
+    "requests": ["geminiflashlite"]
+  }
+}

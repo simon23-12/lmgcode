@@ -1,0 +1,22 @@
+{
+  "titel": "Nicht angewendetes SEARCH/REPLACE wird im Verlauf als nicht angewendet vermerkt",
+  "quelle": "Unterricht 2026-11-26: drei Folgeantworten suchten jeweils nach dem REPLACE der vorigen, gescheiterten Antwort",
+  "dateien": {
+    "shannon.html": "<!DOCTYPE html>\n<html>\n<body>\n<script>\nfunction startGame() {\n  score = 0;\n}\n</script>\n</body>\n</html>"
+  },
+  "aktiv": "shannon.html",
+  "modell": "geminiflashlite",
+  "frage": "der rest: itemInterval = setInterval(spawnBit, 1000);",
+  "antworten": [
+    {
+      "text": "<<<<<<< SEARCH\n  gameInterval = setInterval(update, 1000 / 60);\n=======\n  gameInterval = setInterval(update, 1000 / 60);\n  itemInterval = setInterval(spawnBit, 1000);\n>>>>>>> REPLACE\n\nSpiellogik vervollständigt."
+    }
+  ],
+  "erwartet": {
+    "dateien": { "shannon.html": { "unveraendert": true } },
+    "keinCodeImChat": false,
+    "chatEnthaelt": ["keine exakte Übereinstimmung"],
+    "verlaufEnthaelt": ["NICHT angewendet"],
+    "requests": ["geminiflashlite"]
+  }
+}
