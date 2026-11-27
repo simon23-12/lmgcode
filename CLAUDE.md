@@ -102,6 +102,8 @@ Daraus folgt zweierlei, was beim GitHub-Import lange falsch war:
 
   **Dateiname mit Leerzeichen + Verlauf (2026-11-26, Gemini 3.5 Flash Lite, Fälle 19–22):** Bei einem Fence wie ```` ```präsnetation claude shannon.html ```` wurde der Bezeichner in Wörter zerlegt und daraus `shannon.html`. Das Ergebnis war eine *neue* Datei mit der ganzen Seite (+460), bei SEARCH/REPLACE sogar eine Änderung an der falschen Datei. Jetzt prüft `vorhandeneDateiIn()` zuerst gegen die vorhandenen Dateien. Danach kam eine Kette von Fehlschlägen: Das Modell hielt seine zurückgenommene bzw. gescheiterte Änderung für angewendet und suchte in jeder neuen Antwort nach dem REPLACE-Text der vorigen. Deshalb kommen Rückgängig und nicht angewendete Blöcke jetzt als `role: 'app'` in den Verlauf („App-Hinweis"), und die Prompt-Regel sagt, dass der SEARCH-Text aus den PROJEKTDATEIEN stammen muss.
 
+  **Alte Fassungen im Verlauf (2026-11-27, Gemini 3.5 Flash Lite, Fall 23):** Nach ~10 Änderungen an derselben Stelle (Foto-Modal) scheiterten drei SEARCH-Blöcke. Der gesuchte Text stand nur noch in früheren Antworten im Verlauf, nicht mehr in der Datei. `verlaufOhneCode()` blendet deshalb Code- und SEARCH/REPLACE-Blöcke alter Antworten im Prompt aus (die Prosa bleibt), und der Prompt sagt, dass der Stand nur unter PROJEKTDATEIEN steht. Ohne die echte Datei aus dem Unterricht ist das die plausibelste Ursache, nicht nachgewiesen.
+
   Test-Rezept: im Browser `window.fetch` für `/api/chat` durch einen Fake-SSE-Stream mit gespeicherten Modellantworten ersetzen und `sendMessage()` aufrufen — so laufen echte Antworten durch die komplette Pipeline inkl. Live-Streaming, ohne Kontingent zu verbrauchen. **Das ist jetzt automatisiert, siehe „Replay-Tests".**
 
 ### Replay-Tests (`tests/`)

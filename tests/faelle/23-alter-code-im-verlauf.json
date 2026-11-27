@@ -1,0 +1,27 @@
+{
+  "titel": "Code alter Antworten steht nicht im Verlauf — das Modell soll aus der Datei suchen, nicht aus alten Fassungen",
+  "quelle": "Unterricht 2026-11-27, Gemini 3.5 Flash Lite: nach mehreren Änderungen am Foto-Modal suchte das Modell nach Beschriftungen, die es so nur in früheren Antworten gab (3 Fehlschläge in einer Sitzung)",
+  "dateien": {
+    "index.html": "<!DOCTYPE html>\n<html lang=\"de\">\n<body>\n  <div id=\"photo-modal\">\n    <div style=\"margin: 15px 0;\">\n      <img src=\"larry.jpg\" alt=\"Larry Page\">\n      <p>Larry Page</p>\n    </div>\n  </div>\n</body>\n</html>"
+  },
+  "aktiv": "index.html",
+  "modell": "geminiflashlite35",
+  "verlauf": [
+    { "role": "user", "text": "unter dem bild soll ein name stehen" },
+    { "role": "bot", "text": "```index.html\n<<<<<<< SEARCH\n      <img src=\"larry.jpg\" alt=\"Larry Page\">\n=======\n      <img src=\"larry.jpg\" alt=\"Larry Page\">\n      <p>Larry Page und Sergey Brin</p>\n>>>>>>> REPLACE\n```\n\nNamen unter das Bild eingefügt." },
+    { "role": "user", "text": "nur larry page" },
+    { "role": "bot", "text": "<<<<<<< SEARCH\n      <p>Larry Page und Sergey Brin</p>\n=======\n      <p>Larry Page</p>\n>>>>>>> REPLACE\n\nBeschriftung korrigiert." }
+  ],
+  "frage": "mach den namen fett",
+  "antworten": [
+    {
+      "text": "<<<<<<< SEARCH\n      <p>Larry Page</p>\n=======\n      <p><b>Larry Page</b></p>\n>>>>>>> REPLACE\n\nName ist jetzt fett."
+    }
+  ],
+  "erwartet": {
+    "dateien": { "index.html": { "enthaelt": ["<b>Larry Page</b>"] } },
+    "promptEnthaelt": ["Namen unter das Bild eingefügt.", "Beschriftung korrigiert."],
+    "promptEnthaeltNicht": ["Larry Page und Sergey Brin"],
+    "requests": ["geminiflashlite35"]
+  }
+}

@@ -1487,7 +1487,7 @@ neuer Code
 6. Mehrere Dateien gleichzeitig: Mehrere Codeblöcke mit je eigenem Dateinamen ausgeben — alle werden automatisch angelegt.
 WICHTIG bei neuen Projekten mit mehreren Dateien: Wenn die aktuelle Datei "Unbenannt" oder leer ist, ignoriere sie — erstelle einfach die neuen Projektdateien mit den richtigen Namen (z.B. index.html, style.css, script.js). Benenne "Unbenannt" NICHT um.
 VERBOTEN: Niemals nur einen Teil ausgeben (löscht den Rest). Wenn unklar: SEARCH/REPLACE. Niemals denselben Inhalt in mehrere Dateien kopieren.
-Der SEARCH-Text muss exakt so im Original stehen (Leerzeichen und Einrückung beachten). Nimm ihn aus den PROJEKTDATEIEN oben, NICHT aus deinen früheren Antworten — die können rückgängig gemacht oder nicht angewendet worden sein.
+Der SEARCH-Text muss exakt so im Original stehen (Leerzeichen und Einrückung beachten). Im BISHERIGEN GESPRÄCH ist Code ausgeblendet — der aktuelle Stand jeder Datei steht NUR unter PROJEKTDATEIEN. Eine Änderung braucht immer einen echten SEARCH/REPLACE-Block oder Codeblock; nur behaupten, dass etwas geändert wurde, ändert nichts. Nimm ihn aus den PROJEKTDATEIEN oben, NICHT aus deinen früheren Antworten — die können rückgängig gemacht oder nicht angewendet worden sein.
 
 ABSCHLUSS: Schreibe nach dem Code genau EINEN kurzen Satz (max. 15 Wörter) in der Sprache des Schülers — was du geändert oder gefixt hast, nicht was der Code tut.
 Beispiele: "Vogel ist jetzt rot statt gelb." · "Kollision mit den Röhren gefixt — du prallst jetzt ab." · "Punktezähler eingebaut."
@@ -1509,7 +1509,7 @@ ABSCHLUSS: Schreibe nach dem Code genau EINEN kurzen Satz (max. 15 Wörter) in d
   if (agent.chatHistory.length > 0) {
     p += '\n### BISHERIGES GESPRÄCH ###\n';
     agent.chatHistory.slice(-10).forEach(m => {
-      p += `${m.role === 'user' ? 'Schüler' : m.role === 'app' ? 'App-Hinweis' : 'Helper'}: "${m.text}"\n`;
+      p += `${m.role === 'user' ? 'Schüler' : m.role === 'app' ? 'App-Hinweis' : 'Helper'}: "${m.role === 'bot' ? verlaufOhneCode(m.text) : m.text}"\n`;
     });
   }
 
@@ -1547,7 +1547,7 @@ Gib aus:
   if (agent.chatHistory.length > 0) {
     p += '\n### BISHERIGES GESPRÄCH ###\n';
     agent.chatHistory.slice(-6).forEach(m => {
-      p += `${m.role === 'user' ? 'Schüler' : m.role === 'app' ? 'App-Hinweis' : 'Helper'}: "${m.text}"\n`;
+      p += `${m.role === 'user' ? 'Schüler' : m.role === 'app' ? 'App-Hinweis' : 'Helper'}: "${m.role === 'bot' ? verlaufOhneCode(m.text) : m.text}"\n`;
     });
   }
 
@@ -3114,6 +3114,20 @@ function applySRProjekt(text, bevorzugt, basisVon) {
     count++; added += hit.added; removed += hit.removed;
   }
   return count > 0 ? { dateien, count, added, removed, blocks: bloecke.length, failed } : null;
+}
+
+// Code früherer Antworten bleibt aus dem Verlauf fürs Modell draußen. Sonst hat es
+// mehrere alte Fassungen derselben Stelle vor sich und baut seinen SEARCH-Text aus
+// einer davon statt aus der Datei — im Unterricht 2026-11-27 drei Fehlschläge in einer
+// Sitzung („Larry Page und Sergey Brin" stand nur noch in einer alten Antwort).
+// Der aktuelle Stand steht ohnehin unter PROJEKTDATEIEN.
+function verlaufOhneCode(text) {
+  return String(text)
+    .replace(/^[^\S\n]*(`{3,})[^\S\n]*([^\n`]*)\n[\s\S]*?(?:^[^\S\n]*\1`*[^\S\n]*$|(?![\s\S]))/gm,
+      (_, f, info) => `[Code${info.trim() ? ' für ' + info.trim() : ''} — hier ausgeblendet]`)
+    .replace(/^[^\S\n]*<{4,10}[^\S\n]*SEARCH[\s\S]*?(?:^[^\S\n]*>{4,10}[^\S\n]*REPLACE[^\n]*$|(?![\s\S]))/gm,
+      '[SEARCH/REPLACE — hier ausgeblendet]')
+    .replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // SEARCH/REPLACE-Blöcke für die Chat-Anzeige in Codeblöcke packen, sonst liest

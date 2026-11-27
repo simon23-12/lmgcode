@@ -241,6 +241,7 @@ export async function fuehreAus(page, fall, { nurDiesesModell = false } = {}) {
 //   irgendeineDatei: { regex: [] },   // mind. eine Datei passt (Neubau: Dateiname offen)
 //   keinCodeImChat: true,   // Standard: an
 //   chatEnthaelt: [], chatEnthaeltNicht: [],
+//   promptEnthaelt: [], promptEnthaeltNicht: [],   // der an das Modell geschickte Prompt
 //   verlaufEnthaelt: [],    // agent.chatHistory nach der Antwort (danachUndo: true → erst Rückgängig klicken)
 //   requests: ["geminiflashlite", "north"],   // exakte Modellfolge (nur Replay)
 //   aktiv: "index.html",
@@ -287,6 +288,8 @@ export function pruefe(fall, erg, konsolenFehler = []) {
   const chat = erg.nachrichten.map(n => n.text).join('\n');
   for (const s of e.chatEnthaelt || []) if (!chat.includes(s)) inhalt(`Chat enthält nicht ${JSON.stringify(s)}`);
   for (const s of e.chatEnthaeltNicht || []) if (chat.includes(s)) inhalt(`Chat enthält unerwartet ${JSON.stringify(s)}`);
+  for (const s of e.promptEnthaelt || []) if (!(erg.prompt || '').includes(s)) inhalt(`Prompt enthält nicht ${JSON.stringify(s)}`);
+  for (const s of e.promptEnthaeltNicht || []) if ((erg.prompt || '').includes(s)) inhalt(`Prompt enthält unerwartet ${JSON.stringify(s)}`);
   for (const s of e.verlaufEnthaelt || []) if (!(erg.verlauf || '').includes(s)) inhalt(`Verlauf fürs Modell enthält nicht ${JSON.stringify(s)}`);
   if (e.requests && erg.requests && JSON.stringify(e.requests) !== JSON.stringify(erg.requests))
     inhalt(`Modellfolge ${JSON.stringify(erg.requests)}, erwartet ${JSON.stringify(e.requests)}`);
