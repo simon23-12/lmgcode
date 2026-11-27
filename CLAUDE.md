@@ -358,8 +358,10 @@ Crtl+C: Dev Modus stoppen
 
 ## Deployment
 
+Bei jedem Deploy auch GitHub aktualisieren (`origin` = github.com/simon23-12/lmgcode) — erst committen, dann pushen, dann deployen:
 ```bash
 cd "/Users/sim/Documents/LMG Code"
+git push
 vercel --prod --yes
 ```
 
